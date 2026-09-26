@@ -1,0 +1,11 @@
+# Runtime dependencies. All have wheels for macOS arm64 and Linux aarch64
+# (Raspberry Pi OS 64-bit), so no compilation is needed on either platform.
+opencv-python==5.0.0.93
+numpy==2.5.3
+mediapipe==1.0.1
+PyYAML==6.0.3
+
+# Development / test tooling
+pytest==9.1.1
+black==26.5.1
+ruff==0.16.9

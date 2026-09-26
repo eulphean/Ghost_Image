@@ -1,0 +1,21 @@
+[project]
+name = "ghost-image"
+version = "0.1.0"
+description = "Interactive art installation: people are rendered as translucent ghosts over a held camera frame."
+requires-python = ">=3.11"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["."]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP"]
+
+[tool.black]
+line-length = 100
+target-version = ["py311"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

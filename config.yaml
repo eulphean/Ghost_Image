@@ -1,0 +1,69 @@
+# Ghost Image configuration.
+#
+# Every tunable lives here. To override a few values on one machine (for
+# example a lower processing resolution on the Raspberry Pi), create a
+# `config.local.yaml` next to this file containing only the keys you want to
+# change; it is git-ignored and deep-merged on top of this file.
+#
+# Colours are BGR (OpenCV order), 0-255. Blur/feather sizes must be 0 (off)
+# or a positive odd number.
+
+camera:
+  preferred_index: null      # force a device index (e.g. 1); null = auto-detect
+  preferred_name: null       # substring of the device name to prefer (Linux/V4L2)
+  prefer_usb: true           # skip built-in cameras when a USB camera is present
+  backend: auto              # auto | v4l2 | avfoundation | any
+  width: 1280
+  height: 720
+  fps: 30
+  reconnect_failures: 30     # consecutive failed reads before re-detecting the camera
+
+processing:
+  segmenter: mediapipe       # mediapipe | diff | hybrid
+  width: 320                 # frame width fed to the segmenter (smaller = faster)
+  frame_skip: 0              # 0 = segment every frame; 1 = every other frame, etc.
+  mask_threshold: 0.5        # where the soft mask becomes "person" for contours
+  mask_smoothing: 0.5        # temporal smoothing, weight of previous mask (0 = off)
+  feather_px: 7              # soften mask edges
+  min_blob_area: 400         # drop detected regions smaller than this (pixels)
+  diff_threshold: 30         # frame-difference segmenter sensitivity (0-255)
+
+ghost:
+  alpha: 0.45                # ghost opacity (0 = invisible, 1 = solid)
+  alpha_step: 0.05           # change per [ / ] key press
+  desaturate: 0.7            # 0 = full colour, 1 = greyscale
+  tint: [255, 230, 200]      # BGR tint applied to the ghost body
+  tint_strength: 0.25
+  blur_px: 0                 # soften the ghost body
+
+glow:
+  enabled: true
+  color: [255, 240, 200]     # BGR outline colour
+  thickness: 3               # outline thickness in pixels before blurring
+  blur_px: 21                # halo softness
+  intensity: 1.0
+  pulse: true                # slowly breathe the glow intensity
+  pulse_period_s: 4.0
+
+display:
+  window_name: Ghost Image
+  fullscreen: false          # the Pi kiosk sets this true in config.local.yaml
+  show_fps: true
+  debug: false               # start in debug view (per-stage timings, mask view)
+
+paths:
+  models_dir: models
+  model_file: selfie_segmenter.tflite
+  captures_dir: captures
+  held_frame_file: held.png
+  restore_held: true         # reload the last held frame at startup
+
+keys:
+  hold: [space]
+  release: [r]
+  debug: [d]
+  fullscreen: [f]
+  opacity_down: ["["]
+  opacity_up: ["]"]
+  snapshot: [s]
+  quit: [q, esc]
