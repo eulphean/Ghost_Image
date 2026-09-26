@@ -14,7 +14,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-from ghost_image.config import PROJECT_ROOT, SEGMENTERS, Config, ProcessingConfig
+from ghost_image.config import PROJECT_ROOT, Config, ProcessingConfig
 
 
 class SegmentationError(RuntimeError):
@@ -38,13 +38,24 @@ class Segmenter:
 def create_segmenter(config: Config) -> Segmenter:
     """Build the segmenter selected by ``config.processing.segmenter``."""
     kind = config.processing.segmenter
-    if kind == "mediapipe":
-        path = PROJECT_ROOT / config.paths.models_dir / config.paths.model_file
-        inner: Segmenter = MediaPipeSegmenter(path, config.processing.width)
-        return ProcessedSegmenter(inner, config.processing)
-    if kind not in SEGMENTERS:
+    if kind == "diff":
+        inner: Segmenter = DiffSegmenter(config.processing.diff_threshold)
+    elif kind == "mediapipe":
+        inner = _mediapipe(config)
+    elif kind == "hybrid":
+        inner = HybridSegmenter(
+            _mediapipe(config),
+            config.processing.hybrid_mode,
+            config.processing.diff_threshold,
+        )
+    else:
         raise SegmentationError(f"unknown segmenter {kind!r}")
-    raise SegmentationError(f"segmenter {kind!r} is not available yet")
+    return ProcessedSegmenter(inner, config.processing)
+
+
+def _mediapipe(config: Config) -> MediaPipeSegmenter:
+    path = PROJECT_ROOT / config.paths.models_dir / config.paths.model_file
+    return MediaPipeSegmenter(path, config.processing.width)
 
 
 def ensure_mask(mask: np.ndarray, frame: np.ndarray) -> np.ndarray:
@@ -256,3 +267,69 @@ class MediaPipeSegmenter(Segmenter):
                 return
             with self._lock:
                 self._latest = mask
+
+
+def difference_mask(frame: np.ndarray, held: np.ndarray, threshold: int) -> np.ndarray:
+    """Person mask from how much ``frame`` differs from ``held``.
+
+    Compared in Lab after scaling the live lightness to the reference, so a
+    camera-wide brightness shift does not light up the whole frame. 1 where
+    the scene changed.
+    """
+    if held.shape[:2] != frame.shape[:2]:
+        held = cv2.resize(held, (frame.shape[1], frame.shape[0]), interpolation=cv2.INTER_LINEAR)
+    live = cv2.cvtColor(frame, cv2.COLOR_BGR2LAB).astype(np.float32)
+    reference = cv2.cvtColor(held, cv2.COLOR_BGR2LAB).astype(np.float32)
+    live[..., 0] *= (float(reference[..., 0].mean()) + 1.0) / (float(live[..., 0].mean()) + 1.0)
+    delta = np.max(np.abs(live - reference), axis=2)
+    return (delta >= float(threshold)).astype(np.float32)
+
+
+def combine_masks(model: np.ndarray, diff: np.ndarray, mode: str) -> np.ndarray:
+    """Merge a model mask and a frame-difference mask.
+
+    ``refine`` keeps the model mask and adds difference pixels that touch it,
+    which recovers thin fingers without letting a lighting change fill the frame.
+    """
+    if mode == "union":
+        return np.maximum(model, diff)
+    if mode == "intersect":
+        return np.minimum(model, diff)
+    dilated = cv2.dilate(model, np.ones((7, 7), np.uint8))
+    nearby = np.where(dilated > 0.2, diff, 0.0)
+    return np.maximum(model, nearby).astype(np.float32, copy=False)
+
+
+class DiffSegmenter(Segmenter):
+    """Classical difference against the held frame. No model required."""
+
+    name = "diff"
+
+    def __init__(self, threshold: int) -> None:
+        self.threshold = threshold
+
+    def mask(self, frame: np.ndarray, held: np.ndarray | None = None) -> np.ndarray:
+        if held is None:
+            return empty_mask(frame)
+        return difference_mask(frame, held, self.threshold)
+
+
+class HybridSegmenter(Segmenter):
+    """MediaPipe mask refined with frame difference."""
+
+    name = "hybrid"
+
+    def __init__(self, model: Segmenter, mode: str, threshold: int) -> None:
+        self._model = model
+        self.mode = mode
+        self.threshold = threshold
+
+    def mask(self, frame: np.ndarray, held: np.ndarray | None = None) -> np.ndarray:
+        model_mask = self._model.mask(frame, held)
+        if held is None:
+            return model_mask
+        diff = difference_mask(frame, held, self.threshold)
+        return combine_masks(model_mask, diff, self.mode)
+
+    def close(self) -> None:
+        self._model.close()

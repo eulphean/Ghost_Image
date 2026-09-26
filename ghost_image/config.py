@@ -23,6 +23,7 @@ LOCAL_CONFIG_NAME = "config.local.yaml"
 
 BACKENDS = ("auto", "v4l2", "avfoundation", "any")
 SEGMENTERS = ("mediapipe", "diff", "hybrid")
+HYBRID_MODES = ("union", "intersect", "refine")
 
 
 class ConfigError(ValueError):
@@ -62,6 +63,7 @@ class ProcessingConfig:
     morph_px: int = 5  # open/close kernel (odd, 0 = off)
     min_blob_area: int = 400  # remove connected components smaller than this
     diff_threshold: int = 30  # frame-difference segmenter threshold (0-255)
+    hybrid_mode: str = "refine"  # union | intersect | refine
 
 
 @dataclass
@@ -279,6 +281,10 @@ def _validate(cfg: Config) -> None:
     _check_kernel("processing.morph_px", proc.morph_px)
     _check(proc.min_blob_area >= 0, "processing.min_blob_area must be >= 0")
     _check(0 <= proc.diff_threshold <= 255, "processing.diff_threshold must be in [0, 255]")
+    _check(
+        proc.hybrid_mode in HYBRID_MODES,
+        f"processing.hybrid_mode must be one of {HYBRID_MODES}",
+    )
 
     _check(0.0 <= ghost.alpha <= 1.0, "ghost.alpha must be in [0, 1]")
     _check(0.0 < ghost.alpha_step <= 1.0, "ghost.alpha_step must be in (0, 1]")

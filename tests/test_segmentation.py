@@ -11,7 +11,9 @@ from ghost_image.config import Config, ProcessingConfig, config_from_dict
 from ghost_image.segmentation import (
     MediaPipeSegmenter,
     SegmentationError,
+    combine_masks,
     create_segmenter,
+    difference_mask,
     empty_mask,
     ensure_mask,
     person_from_confidences,
@@ -55,10 +57,26 @@ def test_empty_mask_matches_frame():
     assert float(mask.sum()) == 0.0
 
 
-@pytest.mark.parametrize("kind", ["diff", "hybrid"])
-def test_factory_rejects_engines_until_they_exist(kind):
-    config = config_from_dict({"processing": {"segmenter": kind}})
-    with pytest.raises(SegmentationError, match="not available yet"):
+def test_diff_segmenter_needs_no_model():
+    config = config_from_dict({"processing": {"segmenter": "diff", "feather_px": 0, "morph_px": 0}})
+    segmenter = create_segmenter(config)
+    try:
+        frame = np.zeros((8, 8, 3), np.uint8)
+        mask = segmenter.mask(frame, frame)
+    finally:
+        segmenter.close()
+    assert mask.shape == (8, 8)
+    assert float(mask.max()) == 0.0
+
+
+def test_hybrid_factory_requires_the_model(tmp_path):
+    config = config_from_dict(
+        {
+            "processing": {"segmenter": "hybrid"},
+            "paths": {"models_dir": str(tmp_path), "model_file": "missing.tflite"},
+        }
+    )
+    with pytest.raises(SegmentationError, match="model not found"):
         create_segmenter(config)
 
 
@@ -118,6 +136,31 @@ def test_postprocess_smooths_toward_the_previous_mask():
     current = np.zeros((4, 4), np.float32)
     out = postprocess(current, previous, _clean(mask_smoothing=0.5))
     assert float(out[0, 0]) == pytest.approx(0.5)
+
+
+def test_difference_mask_is_zero_for_identical_frames_and_one_on_a_change():
+    held = np.full((20, 20, 3), 80, np.uint8)
+    same = difference_mask(held, held, threshold=30)
+    assert float(same.max()) == 0.0
+    changed = held.copy()
+    changed[5:15, 5:15] = 255
+    mask = difference_mask(changed, held, threshold=30)
+    assert float(mask[10, 10]) == 1.0
+    assert float(mask[0, 0]) == 0.0
+
+
+def test_refine_adds_a_nearby_finger_and_drops_a_distant_speck():
+    model = np.zeros((40, 40), np.float32)
+    model[10:20, 10:20] = 1.0
+    diff = np.zeros((40, 40), np.float32)
+    diff[10:20, 20:23] = 1.0
+    diff[35:37, 35:37] = 1.0
+    refined = combine_masks(model, diff, "refine")
+    assert float(refined[15, 21]) == 1.0
+    assert float(refined[15, 15]) == 1.0
+    assert float(refined[36, 36]) == 0.0
+    assert float(combine_masks(model, diff, "union")[36, 36]) == 1.0
+    assert float(combine_masks(model, diff, "intersect")[15, 21]) == 0.0
 
 
 def test_resize_to_width_keeps_aspect():
