@@ -8,8 +8,8 @@ import sys
 from pathlib import Path
 
 from ghost_image import __version__
-from ghost_image.app import run
-from ghost_image.camera import CameraError, format_camera_list, list_cameras
+from ghost_image.app import benchmark_capture, format_benchmark, run
+from ghost_image.camera import CameraError, format_camera_list, list_cameras, open_camera
 from ghost_image.config import DEFAULT_CONFIG_PATH, ConfigError, load_config
 
 
@@ -34,6 +34,13 @@ def build_parser() -> argparse.ArgumentParser:
         "--list-cameras",
         action="store_true",
         help="print discovered cameras and exit",
+    )
+    parser.add_argument(
+        "--benchmark-seconds",
+        type=float,
+        default=None,
+        metavar="SECONDS",
+        help="read the camera for SECONDS and print FPS, without opening a window",
     )
     parser.add_argument(
         "--version",
@@ -64,6 +71,22 @@ def main(argv: list[str] | None = None) -> int:
             return 1
         print(format_camera_list(devices))
         return 0 if devices else 1
+
+    if args.benchmark_seconds is not None:
+        if args.benchmark_seconds <= 0:
+            print("error: --benchmark-seconds must be > 0", file=sys.stderr)
+            return 2
+        try:
+            camera = open_camera(config.camera)
+        except CameraError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 1
+        try:
+            stats = benchmark_capture(camera, args.benchmark_seconds)
+        finally:
+            camera.release()
+        print(format_benchmark(stats))
+        return 0
 
     print(f"Ghost Image v{__version__}")
     print(f"Python {platform.python_version()} on {platform.system()} {platform.machine()}")

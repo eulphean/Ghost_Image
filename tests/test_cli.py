@@ -38,6 +38,31 @@ def test_list_cameras_prints_discovery(monkeypatch, capsys):
     assert "Logitech" in capsys.readouterr().out
 
 
+def test_benchmark_seconds_prints_fps(monkeypatch, capsys):
+    class Cam:
+        def release(self) -> None:
+            self.released = True
+
+    cam = Cam()
+    monkeypatch.setattr("ghost_image.__main__.open_camera", lambda _config: cam)
+    monkeypatch.setattr(
+        "ghost_image.__main__.benchmark_capture",
+        lambda _camera, _seconds: {
+            "frames": 10.0,
+            "elapsed": 1.0,
+            "fps": 10.0,
+            "cpu_seconds": 0.2,
+        },
+    )
+    assert main(["--benchmark-seconds", "1"]) == 0
+    assert "fps=10.0" in capsys.readouterr().out
+    assert cam.released
+
+
+def test_benchmark_seconds_rejects_zero():
+    assert main(["--benchmark-seconds", "0"]) == 2
+
+
 def test_list_cameras_empty_is_an_error(monkeypatch, capsys):
     monkeypatch.setattr("ghost_image.__main__.list_cameras", lambda _config: [])
     assert main(["--list-cameras"]) == 1

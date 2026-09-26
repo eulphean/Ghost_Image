@@ -18,7 +18,7 @@ echo "==> Installing system packages"
 sudo apt-get update
 sudo apt-get install -y \
     python3 python3-venv python3-dev \
-    libgl1 libglib2.0-0 \
+    libgl1 libglib2.0-0 libatlas3-base \
     v4l-utils
 
 PY_VERSION="$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')"

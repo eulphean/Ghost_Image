@@ -6,7 +6,9 @@ Later phases plug segmentation and compositing into ``present``.
 
 from __future__ import annotations
 
+import resource
 import time
+from collections.abc import Callable
 from typing import Protocol
 
 import numpy as np
@@ -37,6 +39,41 @@ def present(frame: np.ndarray, *, fps: float, show_fps: bool) -> np.ndarray:
     if not show_fps:
         return frame
     return draw_overlay(frame, [f"{fps:4.1f} fps"])
+
+
+def benchmark_capture(
+    camera: FrameSource,
+    seconds: float,
+    *,
+    clock: Callable[[], float] = time.perf_counter,
+) -> dict[str, float]:
+    """Read frames for ``seconds`` and report FPS and process CPU time.
+
+    Used by the Pi smoke test (``--benchmark-seconds``) before any segmentation
+    is added, so the number is the camera's baseline.
+    """
+    start = clock()
+    usage = resource.getrusage(resource.RUSAGE_SELF)
+    frames = 0
+    while clock() - start < seconds:
+        if camera.read() is not None:
+            frames += 1
+    elapsed = max(clock() - start, 1e-9)
+    usage_after = resource.getrusage(resource.RUSAGE_SELF)
+    cpu = (usage_after.ru_utime - usage.ru_utime) + (usage_after.ru_stime - usage.ru_stime)
+    return {
+        "frames": float(frames),
+        "elapsed": elapsed,
+        "fps": frames / elapsed,
+        "cpu_seconds": cpu,
+    }
+
+
+def format_benchmark(stats: dict[str, float]) -> str:
+    return (
+        f"frames={int(stats['frames'])} elapsed={stats['elapsed']:.2f}s "
+        f"fps={stats['fps']:.1f} cpu={stats['cpu_seconds']:.2f}s"
+    )
 
 
 def run(

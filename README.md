@@ -45,6 +45,19 @@ source .venv/bin/activate
 To update later: `git pull`, then `pip install -r requirements.txt` if the
 requirements changed.
 
+### Smoke test
+
+After setup, confirm the USB camera and record a baseline (no window, no
+segmentation). The FPS line is the number to keep when choosing a processing
+resolution later:
+
+```bash
+./scripts/pi_smoke.sh
+```
+
+That lists the cameras, then reads for 5 seconds and prints `fps=` and `cpu=`.
+A live window is the same command as on the Mac: `python -m ghost_image`.
+
 ## Running
 
 ```bash

@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import numpy as np
+import pytest
 
-from ghost_image.app import present, run
+from ghost_image.app import benchmark_capture, format_benchmark, present, run
 from ghost_image.config import Config
 
 
@@ -42,6 +43,26 @@ class FakeDisplay:
 
     def close(self) -> None:
         self.closed = True
+
+
+def test_benchmark_capture_counts_frames_on_a_fake_clock():
+    now = {"t": 0.0}
+
+    class Cam:
+        def read(self) -> np.ndarray:
+            now["t"] += 0.1
+            return np.zeros((2, 2, 3), np.uint8)
+
+        def release(self) -> None:
+            pass
+
+    stats = benchmark_capture(Cam(), 0.35, clock=lambda: now["t"])
+    assert stats["frames"] == 4
+    assert stats["elapsed"] == pytest.approx(0.4)
+    assert stats["fps"] == pytest.approx(10.0)
+    text = format_benchmark(stats)
+    assert "fps=10.0" in text
+    assert "frames=4" in text
 
 
 def test_present_draws_fps():
