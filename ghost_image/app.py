@@ -21,6 +21,8 @@ from ghost_image.camera import open_camera
 from ghost_image.compositor import add_glow, composite, glow_layer
 from ghost_image.config import Config
 from ghost_image.segmentation import (
+    DiffSegmenter,
+    ProcessedSegmenter,
     SegmentationError,
     Segmenter,
     create_segmenter,
@@ -34,7 +36,7 @@ from ghost_image.store import (
     save_snapshot,
     snapshot_path,
 )
-from ghost_image.ui import FpsCounter, OpenCVDisplay, draw_overlay, key_matches
+from ghost_image.ui import FpsCounter, OpenCVDisplay, camera_lost_frame, draw_overlay, key_matches
 
 
 class FrameSource(Protocol):
@@ -62,6 +64,7 @@ class Session:
     view: str = "composite"
     segmenter_name: str = "none"
     segment_error: bool = False
+    loop_error: bool = False
     alpha: float = 0.45
     recent: deque[np.ndarray] = field(default_factory=deque)
 
@@ -216,45 +219,58 @@ def run(
     shown = 0
     try:
         while max_frames is None or shown < max_frames:
-            frame = camera.read()
-            if frame is None:
+            try:
+                frame = camera.read()
+            except Exception as exc:  # noqa: BLE001 - one bad read must not kill the installation
+                _note_loop_error(session, exc)
                 time.sleep(0.05)
                 continue
-            session.remember(frame, config.camera.hold_frames)
-            mask, segmenter = _person_mask(session, frame, config, segmenter)
-            visual = _view_frame(session, frame, mask, config)
-            image = present(
-                visual,
-                fps=fps.tick(),
-                show_fps=config.display.show_fps,
-                mode=session.mode,
-                detail=(
-                    f"a={session.alpha:.2f} glow={config.glow.intensity:.1f} "
-                    f"{session.segmenter_name} {session.view}"
-                ),
-            )
-            key = display.show(image)
-            shown += 1
-            if key_matches(key, config.keys.quit):
-                return 0
-            if key_matches(key, config.keys.fullscreen):
-                display.toggle_fullscreen()
-            elif key_matches(key, config.keys.hold):
-                session.hold()
-                if session.held is not None:
-                    save_held_frame(path, session.held)
-            elif key_matches(key, config.keys.release):
-                session.release()
-                delete_held_frame(path)
-            elif key_matches(key, config.keys.debug):
-                session.view = cycle_view(session.view)
-            elif key_matches(key, config.keys.snapshot):
-                stamp = time.strftime("%Y%m%d-%H%M%S")
-                save_snapshot(snapshot_path(config, stamp), visual)
-            elif key_matches(key, config.keys.opacity_down):
-                session.alpha = max(0.0, session.alpha - config.ghost.alpha_step)
-            elif key_matches(key, config.keys.opacity_up):
-                session.alpha = min(1.0, session.alpha + config.ghost.alpha_step)
+            if frame is None:
+                lost = camera_lost_frame(config.camera.width, config.camera.height)
+                key = display.show(lost)
+                if key_matches(key, config.keys.quit):
+                    return 0
+                time.sleep(0.05)
+                continue
+            try:
+                session.remember(frame, config.camera.hold_frames)
+                mask, segmenter = _person_mask(session, frame, config, segmenter)
+                visual = _view_frame(session, frame, mask, config)
+                image = present(
+                    visual,
+                    fps=fps.tick(),
+                    show_fps=config.display.show_fps,
+                    mode=session.mode,
+                    detail=(
+                        f"a={session.alpha:.2f} glow={config.glow.intensity:.1f} "
+                        f"{session.segmenter_name} {session.view}"
+                    ),
+                )
+                key = display.show(image)
+                shown += 1
+                if key_matches(key, config.keys.quit):
+                    return 0
+                if key_matches(key, config.keys.fullscreen):
+                    display.toggle_fullscreen()
+                elif key_matches(key, config.keys.hold):
+                    session.hold()
+                    if session.held is not None:
+                        save_held_frame(path, session.held)
+                elif key_matches(key, config.keys.release):
+                    session.release()
+                    delete_held_frame(path)
+                elif key_matches(key, config.keys.debug):
+                    session.view = cycle_view(session.view)
+                elif key_matches(key, config.keys.snapshot):
+                    stamp = time.strftime("%Y%m%d-%H%M%S")
+                    save_snapshot(snapshot_path(config, stamp), visual)
+                elif key_matches(key, config.keys.opacity_down):
+                    session.alpha = max(0.0, session.alpha - config.ghost.alpha_step)
+                elif key_matches(key, config.keys.opacity_up):
+                    session.alpha = min(1.0, session.alpha + config.ghost.alpha_step)
+            except Exception as exc:  # noqa: BLE001 - keep the installation up
+                _note_loop_error(session, exc)
+                time.sleep(0.05)
     except KeyboardInterrupt:
         return 0
     finally:
@@ -274,25 +290,48 @@ def _person_mask(
 ) -> tuple[np.ndarray | None, Segmenter | None]:
     """Segment the current frame once a reference is held.
 
-    The segmenter is created on the first held frame. A missing model leaves
-    the held frame on screen and reports the error once.
+    If the configured segmenter cannot be built or fails on a frame, switch to
+    frame differencing and report that once.
     """
     if session.mode != "held":
         return None, segmenter
-    if segmenter is None and not session.segment_error:
+    if segmenter is None:
         try:
             segmenter = create_segmenter(config)
             session.segmenter_name = getattr(segmenter, "name", "segmenter")
         except SegmentationError as exc:
-            print(f"error: {exc}", file=sys.stderr)
-            session.segment_error = True
-            return None, None
-    if segmenter is None:
-        return None, None
+            segmenter = _fallback_segmenter(session, config, str(exc))
     try:
         return segmenter.mask(frame, session.held), segmenter
     except SegmentationError as exc:
-        if not session.segment_error:
-            print(f"error: {exc}", file=sys.stderr)
-            session.segment_error = True
-        return None, segmenter
+        if session.segmenter_name == "diff":
+            _note_loop_error(session, exc)
+            return None, segmenter
+        segmenter = _fallback_segmenter(session, config, str(exc), previous=segmenter)
+        return segmenter.mask(frame, session.held), segmenter
+
+
+def _fallback_segmenter(
+    session: Session,
+    config: Config,
+    reason: str,
+    previous: Segmenter | None = None,
+) -> Segmenter:
+    if not session.segment_error:
+        print(f"error: {reason}; falling back to the diff segmenter", file=sys.stderr)
+        session.segment_error = True
+    if previous is not None:
+        previous.close()
+    segmenter = ProcessedSegmenter(
+        DiffSegmenter(config.processing.diff_threshold),
+        config.processing,
+    )
+    session.segmenter_name = segmenter.name
+    return segmenter
+
+
+def _note_loop_error(session: Session, exc: BaseException) -> None:
+    if session.loop_error:
+        return
+    print(f"error: {exc}", file=sys.stderr)
+    session.loop_error = True

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from ghost_image.ui import FpsCounter, draw_overlay, key_matches, normalize_key
+from ghost_image.ui import FpsCounter, camera_lost_frame, draw_overlay, key_matches, normalize_key
 
 
 def test_normalize_key_ignores_no_key():
@@ -19,6 +19,13 @@ def test_key_matches_quit_and_space():
     assert key_matches(32, ["space"])
     assert not key_matches(-1, ["q"])
     assert not key_matches(ord("f"), ["q", "esc"])
+
+
+def test_camera_lost_frame_is_a_labelled_black_image():
+    image = camera_lost_frame(80, 40)
+    assert image.shape == (40, 80, 3)
+    assert int(image.sum()) > 0
+    assert int(image[0, 0, 0]) == 0
 
 
 def test_draw_overlay_changes_pixels():

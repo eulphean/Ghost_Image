@@ -16,6 +16,7 @@ from ghost_image.app import (
     run,
 )
 from ghost_image.config import Config
+from ghost_image.segmentation import SegmentationError
 
 
 class FakeCamera:
@@ -197,6 +198,60 @@ def test_snapshot_writes_the_composite(tmp_path, monkeypatch):
     loaded = cv2.imread(str(saved[0]))
     assert loaded is not None
     assert loaded.shape == frame.shape
+
+
+def test_missing_camera_frame_shows_a_lost_screen_and_recovers():
+    frames: list[np.ndarray | None] = [None, np.full((32, 32, 3), 9, np.uint8)]
+
+    class Dropping:
+        def read(self) -> np.ndarray | None:
+            return frames.pop(0)
+
+        def release(self) -> None:
+            return None
+
+    display = FakeDisplay([-1, ord("q")])
+    assert run(Config(), camera=Dropping(), display=display) == 0
+    assert display.shown[0].shape == (Config().camera.height, Config().camera.width, 3)
+    assert int(display.shown[0].sum()) > 0
+
+
+def test_read_error_is_reported_once_and_the_loop_continues(capsys):
+    calls = {"n": 0}
+
+    class Flaky:
+        def read(self) -> np.ndarray:
+            calls["n"] += 1
+            if calls["n"] == 1:
+                raise RuntimeError("timeout")
+            return np.zeros((16, 16, 3), np.uint8)
+
+        def release(self) -> None:
+            return None
+
+    assert run(Config(), camera=Flaky(), display=FakeDisplay([ord("q")])) == 0
+    assert capsys.readouterr().err.count("timeout") == 1
+
+
+def test_segmenter_failure_falls_back_to_diff(monkeypatch, capsys):
+    def boom(_config):
+        raise SegmentationError("model missing")
+
+    monkeypatch.setattr("ghost_image.app.create_segmenter", boom)
+    config = Config()
+    config.processing.min_blob_area = 0
+    config.processing.feather_px = 0
+    config.processing.morph_px = 0
+    held = np.full((48, 48, 3), 20, np.uint8)
+    live = held.copy()
+    live[16:32, 16:32] = 220
+    display = FakeDisplay([32, ord("q")])
+    run(config, camera=FakeCamera([held, live]), display=display)
+    err = capsys.readouterr().err
+    assert "falling back to the diff segmenter" in err
+    assert err.count("falling back") == 1
+    # The changed patch is blended; a global brightness shift would be ignored.
+    assert int(display.shown[1][24, 24, 0]) != 20
 
 
 def test_quit_key_stops_and_closes():

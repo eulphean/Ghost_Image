@@ -47,6 +47,26 @@ def key_matches(key: int, names: list[str]) -> bool:
     return any(key_code(name) == code for name in names)
 
 
+def camera_lost_frame(
+    width: int,
+    height: int,
+    message: str = "camera lost — reconnecting",
+) -> np.ndarray:
+    """A black frame with a single line, shown while discovery runs again."""
+    image = np.zeros((height, width, 3), np.uint8)
+    cv2.putText(
+        image,
+        message,
+        (24, max(height // 2, 24)),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.8,
+        (255, 255, 255),
+        2,
+        cv2.LINE_AA,
+    )
+    return image
+
+
 def draw_overlay(frame: np.ndarray, lines: list[str]) -> np.ndarray:
     """Draw ``lines`` in the top-left of a copy of ``frame``."""
     out = frame.copy()
