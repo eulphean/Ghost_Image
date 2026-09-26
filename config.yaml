@@ -62,6 +62,7 @@ paths:
   captures_dir: captures
   held_frame_file: held.png
   restore_held: true         # reload the last held frame at startup
+  log_file: logs/ghost_image.log
 
 keys:
   hold: [space]

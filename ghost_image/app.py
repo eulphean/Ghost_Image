@@ -7,7 +7,6 @@ Later phases plug segmentation and compositing into ``present``.
 from __future__ import annotations
 
 import resource
-import sys
 import time
 from collections import deque
 from collections.abc import Callable
@@ -20,6 +19,7 @@ import numpy as np
 from ghost_image.camera import open_camera
 from ghost_image.compositor import add_glow, composite, glow_layer
 from ghost_image.config import Config
+from ghost_image.log import StageTimer, report_error
 from ghost_image.segmentation import (
     DiffSegmenter,
     ProcessedSegmenter,
@@ -206,6 +206,7 @@ def run(
         display = OpenCVDisplay(config.display)
 
     fps = FpsCounter()
+    timer = StageTimer()
     session = Session()
     session.view = "mask" if config.display.debug else "composite"
     session.alpha = config.ghost.alpha
@@ -234,17 +235,25 @@ def run(
                 continue
             try:
                 session.remember(frame, config.camera.hold_frames)
-                mask, segmenter = _person_mask(session, frame, config, segmenter)
-                visual = _view_frame(session, frame, mask, config)
+                with timer.measure("segment"):
+                    mask, segmenter = _person_mask(session, frame, config, segmenter)
+                with timer.measure("composite"):
+                    visual = _view_frame(session, frame, mask, config)
+                detail = (
+                    f"a={session.alpha:.2f} glow={config.glow.intensity:.1f} "
+                    f"{session.segmenter_name} {session.view}"
+                )
+                if session.view != "composite" or config.display.debug:
+                    detail += (
+                        f"  seg {timer.ms.get('segment', 0):.0f}ms"
+                        f" comp {timer.ms.get('composite', 0):.0f}ms"
+                    )
                 image = present(
                     visual,
                     fps=fps.tick(),
                     show_fps=config.display.show_fps,
                     mode=session.mode,
-                    detail=(
-                        f"a={session.alpha:.2f} glow={config.glow.intensity:.1f} "
-                        f"{session.segmenter_name} {session.view}"
-                    ),
+                    detail=detail,
                 )
                 key = display.show(image)
                 shown += 1
@@ -318,7 +327,7 @@ def _fallback_segmenter(
     previous: Segmenter | None = None,
 ) -> Segmenter:
     if not session.segment_error:
-        print(f"error: {reason}; falling back to the diff segmenter", file=sys.stderr)
+        report_error(f"{reason}; falling back to the diff segmenter")
         session.segment_error = True
     if previous is not None:
         previous.close()
@@ -336,5 +345,5 @@ def _fallback_segmenter(
 def _note_loop_error(session: Session, exc: BaseException) -> None:
     if session.loop_error:
         return
-    print(f"error: {exc}", file=sys.stderr)
+    report_error(str(exc))
     session.loop_error = True

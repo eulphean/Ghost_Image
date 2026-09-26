@@ -108,6 +108,7 @@ class PathsConfig:
     captures_dir: str = "captures"
     held_frame_file: str = "held.png"
     restore_held: bool = True  # reload the held frame at startup if present
+    log_file: str = "logs/ghost_image.log"
 
 
 @dataclass

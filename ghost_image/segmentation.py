@@ -149,12 +149,19 @@ class ProcessedSegmenter(Segmenter):
         self._inner = inner
         self._processing = processing
         self._previous: np.ndarray | None = None
+        self._cached: np.ndarray | None = None
+        self._skip_left = 0
         self.name = inner.name
 
     def mask(self, frame: np.ndarray, held: np.ndarray | None = None) -> np.ndarray:
+        if self._cached is not None and self._skip_left > 0:
+            self._skip_left -= 1
+            return self._cached
         raw = self._inner.mask(frame, held)
         cleaned = postprocess(raw, self._previous, self._processing)
         self._previous = cleaned
+        self._cached = cleaned
+        self._skip_left = self._processing.frame_skip
         return cleaned
 
     def close(self) -> None:

@@ -11,6 +11,7 @@ from ghost_image.config import Config, ProcessingConfig, config_from_dict
 from ghost_image.segmentation import (
     DiffSegmenter,
     MediaPipeSegmenter,
+    ProcessedSegmenter,
     SegmentationError,
     combine_masks,
     create_segmenter,
@@ -56,6 +57,36 @@ def test_empty_mask_matches_frame():
     assert mask.shape == (3, 5)
     assert mask.dtype == np.float32
     assert float(mask.sum()) == 0.0
+
+
+def test_frame_skip_reuses_the_previous_mask():
+    class Counter:
+        name = "counter"
+
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def mask(self, frame, held=None):
+            self.calls += 1
+            return np.ones(frame.shape[:2], np.float32)
+
+        def close(self) -> None:
+            return None
+
+    inner = Counter()
+    processing = ProcessingConfig(
+        frame_skip=1,
+        feather_px=0,
+        morph_px=0,
+        mask_smoothing=0.0,
+        min_blob_area=0,
+    )
+    segmenter = ProcessedSegmenter(inner, processing)
+    frame = np.zeros((8, 8, 3), np.uint8)
+    segmenter.mask(frame)
+    segmenter.mask(frame)
+    segmenter.mask(frame)
+    assert inner.calls == 2
 
 
 def test_diff_segmenter_needs_no_model():

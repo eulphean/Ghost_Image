@@ -11,6 +11,7 @@ from ghost_image import __version__
 from ghost_image.app import benchmark_capture, format_benchmark, run
 from ghost_image.camera import CameraError, format_camera_list, list_cameras, open_camera
 from ghost_image.config import DEFAULT_CONFIG_PATH, ConfigError, load_config
+from ghost_image.log import setup_logging
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -97,6 +98,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.restore_held is not None:
         config.paths.restore_held = args.restore_held
 
+    setup_logging(config)
     print(f"Ghost Image v{__version__}")
     print(f"Python {platform.python_version()} on {platform.system()} {platform.machine()}")
     try:
