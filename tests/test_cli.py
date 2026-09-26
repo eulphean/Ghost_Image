@@ -16,10 +16,10 @@ def test_version_flag(capsys):
     assert __version__ in capsys.readouterr().out
 
 
-def test_default_run_reports_version(capsys):
+def test_default_run_reports_version(capsys, monkeypatch):
+    monkeypatch.setattr("ghost_image.__main__.run", lambda _config: 0)
     assert main([]) == 0
-    out = capsys.readouterr().out
-    assert f"Ghost Image v{__version__}" in out
+    assert f"Ghost Image v{__version__}" in capsys.readouterr().out
 
 
 def test_show_config_prints_yaml(capsys):

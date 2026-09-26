@@ -56,8 +56,8 @@ python -m ghost_image --show-config  # print the resolved configuration
 python -m ghost_image -c other.yaml  # use a different config file
 ```
 
-Phase 1 status: the app loads its configuration and reports the environment.
-Camera detection and the live view arrive in Phase 2.
+`python -m ghost_image` opens the camera in a window. Press `F` to toggle
+fullscreen and `Q` or `Esc` to quit. The FPS is drawn in the corner.
 
 ## Configuration
 

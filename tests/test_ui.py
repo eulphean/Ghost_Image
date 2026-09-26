@@ -1,0 +1,41 @@
+"""UI helpers. No window is opened."""
+
+from __future__ import annotations
+
+import numpy as np
+
+from ghost_image.ui import FpsCounter, draw_overlay, key_matches, normalize_key
+
+
+def test_normalize_key_ignores_no_key():
+    assert normalize_key(-1) is None
+    assert normalize_key(27) == 27
+    assert normalize_key(ord("q")) == ord("q")
+
+
+def test_key_matches_quit_and_space():
+    assert key_matches(ord("q"), ["q", "esc"])
+    assert key_matches(27, ["q", "esc"])
+    assert key_matches(32, ["space"])
+    assert not key_matches(-1, ["q"])
+    assert not key_matches(ord("f"), ["q", "esc"])
+
+
+def test_draw_overlay_changes_pixels():
+    frame = np.zeros((80, 200, 3), np.uint8)
+    out = draw_overlay(frame, ["12.0 fps"])
+    assert out.shape == frame.shape
+    assert not np.array_equal(out, frame)
+    assert np.array_equal(frame, np.zeros_like(frame))
+
+
+def test_fps_counter_updates_after_half_second():
+    now = {"t": 0.0}
+
+    def clock() -> float:
+        return now["t"]
+
+    counter = FpsCounter(clock)
+    assert counter.tick() == 0.0
+    now["t"] = 0.5
+    assert counter.tick() == 4.0  # 2 frames over 0.5 s

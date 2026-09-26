@@ -8,6 +8,7 @@ import sys
 from pathlib import Path
 
 from ghost_image import __version__
+from ghost_image.app import run
 from ghost_image.camera import CameraError, format_camera_list, list_cameras
 from ghost_image.config import DEFAULT_CONFIG_PATH, ConfigError, load_config
 
@@ -64,13 +65,15 @@ def main(argv: list[str] | None = None) -> int:
         print(format_camera_list(devices))
         return 0 if devices else 1
 
-    # Phase 1 scaffold: report environment and exit. The camera/live view
-    # main loop is added in Phase 2 (see docs/PLAN.md).
     print(f"Ghost Image v{__version__}")
     print(f"Python {platform.python_version()} on {platform.system()} {platform.machine()}")
-    print(f"Config loaded from {args.config if args.config.exists() else '<defaults>'}")
-    print("Nothing to run yet: camera and live view arrive in Phase 2.")
-    return 0
+    try:
+        return run(config)
+    except CameraError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    except KeyboardInterrupt:
+        return 0
 
 
 if __name__ == "__main__":
