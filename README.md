@@ -69,8 +69,11 @@ python -m ghost_image --show-config  # print the resolved configuration
 python -m ghost_image -c other.yaml  # use a different config file
 ```
 
-`python -m ghost_image` opens the camera in a window. Press `F` to toggle
-fullscreen and `Q` or `Esc` to quit. The FPS is drawn in the corner.
+`python -m ghost_image` opens the camera in a window. Press `Space` to hold the
+frame the camera is looking at, and `R` to release it. The held frame is
+written to `captures/held.png` and loaded again on the next launch
+(`--no-restore-held` skips that). `F` toggles fullscreen. `Q` or `Esc` quits.
+The corner shows `LIVE` or `HELD` plus the FPS.
 
 ## Configuration
 

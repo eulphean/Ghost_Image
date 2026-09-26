@@ -78,9 +78,17 @@ def test_present_draws_fps():
     assert not np.array_equal(out, frame)
 
 
-def test_present_can_hide_fps():
+def test_present_can_hide_fps_but_keeps_the_mode():
     frame = np.zeros((40, 80, 3), np.uint8)
-    assert np.array_equal(present(frame, fps=15.0, show_fps=False), frame)
+    out = present(frame, fps=15.0, show_fps=False, mode="held")
+    assert not np.array_equal(out, frame)
+
+
+def test_live_and_held_indicators_differ():
+    frame = np.zeros((80, 200, 3), np.uint8)
+    live = present(frame, fps=0.0, show_fps=False, mode="live")
+    held = present(frame, fps=0.0, show_fps=False, mode="held")
+    assert not np.array_equal(live, held)
 
 
 def test_average_frames_means_pixels():
@@ -113,6 +121,31 @@ def test_hold_averages_the_recent_buffer():
     session.release()
     assert session.mode == "live"
     assert session.held is None
+
+
+def test_hold_is_restored_on_the_next_run(tmp_path, monkeypatch):
+    path = tmp_path / "held.png"
+    monkeypatch.setattr("ghost_image.app.held_frame_path", lambda _config: path)
+    held = np.full((80, 120, 3), 10, np.uint8)
+    live = np.full((80, 120, 3), 90, np.uint8)
+    run(Config(), camera=FakeCamera([held]), display=FakeDisplay([32, ord("q")]))
+    assert path.is_file()
+
+    display = FakeDisplay([ord("q")])
+    run(Config(), camera=FakeCamera([live]), display=display)
+    assert int(display.shown[0][-1, -1, 0]) == 10
+
+
+def test_release_deletes_the_saved_frame(tmp_path, monkeypatch):
+    path = tmp_path / "held.png"
+    monkeypatch.setattr("ghost_image.app.held_frame_path", lambda _config: path)
+    frame = np.full((80, 120, 3), 10, np.uint8)
+    run(
+        Config(),
+        camera=FakeCamera([frame, frame, frame]),
+        display=FakeDisplay([32, ord("r"), ord("q")]),
+    )
+    assert not path.exists()
 
 
 def test_quit_key_stops_and_closes():

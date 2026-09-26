@@ -17,6 +17,7 @@ import numpy as np
 
 from ghost_image.camera import open_camera
 from ghost_image.config import Config
+from ghost_image.store import delete_held_frame, held_frame_path, load_held_frame, save_held_frame
 from ghost_image.ui import FpsCounter, OpenCVDisplay, draw_overlay, key_matches
 
 
@@ -71,11 +72,12 @@ def average_frames(frames: list[np.ndarray]) -> np.ndarray:
     return np.clip(stacked.mean(axis=0), 0, 255).astype(np.uint8)
 
 
-def present(frame: np.ndarray, *, fps: float, show_fps: bool) -> np.ndarray:
-    """Build the image shown for this frame. No ghost processing yet."""
-    if not show_fps:
-        return frame
-    return draw_overlay(frame, [f"{fps:4.1f} fps"])
+def present(frame: np.ndarray, *, fps: float, show_fps: bool, mode: str = "live") -> np.ndarray:
+    """Build the image shown for this frame, with the LIVE/HELD indicator."""
+    lines = [mode.upper()]
+    if show_fps:
+        lines.append(f"{fps:4.1f} fps")
+    return draw_overlay(frame, lines)
 
 
 def benchmark_capture(
@@ -129,6 +131,12 @@ def run(
 
     fps = FpsCounter()
     session = Session()
+    path = held_frame_path(config)
+    if config.paths.restore_held:
+        restored = load_held_frame(path)
+        if restored is not None:
+            session.held = restored
+            session.mode = "held"
     shown = 0
     try:
         while max_frames is None or shown < max_frames:
@@ -141,6 +149,7 @@ def run(
                 session.output_frame(frame),
                 fps=fps.tick(),
                 show_fps=config.display.show_fps,
+                mode=session.mode,
             )
             key = display.show(image)
             shown += 1
@@ -150,8 +159,11 @@ def run(
                 display.toggle_fullscreen()
             elif key_matches(key, config.keys.hold):
                 session.hold()
+                if session.held is not None:
+                    save_held_frame(path, session.held)
             elif key_matches(key, config.keys.release):
                 session.release()
+                delete_held_frame(path)
     except KeyboardInterrupt:
         return 0
     finally:

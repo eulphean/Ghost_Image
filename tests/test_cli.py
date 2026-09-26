@@ -59,6 +59,18 @@ def test_benchmark_seconds_prints_fps(monkeypatch, capsys):
     assert cam.released
 
 
+def test_no_restore_held_overrides_config(monkeypatch):
+    seen: dict[str, bool] = {}
+
+    def fake_run(config):
+        seen["restore"] = config.paths.restore_held
+        return 0
+
+    monkeypatch.setattr("ghost_image.__main__.run", fake_run)
+    assert main(["--no-restore-held"]) == 0
+    assert seen["restore"] is False
+
+
 def test_benchmark_seconds_rejects_zero():
     assert main(["--benchmark-seconds", "0"]) == 2
 

@@ -36,6 +36,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="print discovered cameras and exit",
     )
     parser.add_argument(
+        "--restore-held",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="reload captures/held.png at startup (default: config paths.restore_held)",
+    )
+    parser.add_argument(
         "--benchmark-seconds",
         type=float,
         default=None,
@@ -87,6 +93,9 @@ def main(argv: list[str] | None = None) -> int:
             camera.release()
         print(format_benchmark(stats))
         return 0
+
+    if args.restore_held is not None:
+        config.paths.restore_held = args.restore_held
 
     print(f"Ghost Image v{__version__}")
     print(f"Python {platform.python_version()} on {platform.system()} {platform.machine()}")
