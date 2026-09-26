@@ -8,7 +8,9 @@ from __future__ import annotations
 
 import resource
 import time
+from collections import deque
 from collections.abc import Callable
+from dataclasses import dataclass, field
 from typing import Protocol
 
 import numpy as np
@@ -32,6 +34,41 @@ class Display(Protocol):
     def toggle_fullscreen(self) -> None: ...
 
     def close(self) -> None: ...
+
+
+@dataclass
+class Session:
+    """LIVE shows the camera. HELD freezes the averaged reference frame."""
+
+    mode: str = "live"
+    held: np.ndarray | None = None
+    recent: deque[np.ndarray] = field(default_factory=deque)
+
+    def remember(self, frame: np.ndarray, hold_frames: int) -> None:
+        if self.recent.maxlen != hold_frames:
+            self.recent = deque(self.recent, maxlen=hold_frames)
+        self.recent.append(frame.copy())
+
+    def hold(self) -> None:
+        if not self.recent:
+            return
+        self.held = average_frames(list(self.recent))
+        self.mode = "held"
+
+    def release(self) -> None:
+        self.held = None
+        self.mode = "live"
+
+    def output_frame(self, frame: np.ndarray) -> np.ndarray:
+        if self.mode == "held" and self.held is not None:
+            return self.held
+        return frame
+
+
+def average_frames(frames: list[np.ndarray]) -> np.ndarray:
+    """Mean of BGR frames, used to denoise the held reference."""
+    stacked = np.stack([frame.astype(np.float32) for frame in frames], axis=0)
+    return np.clip(stacked.mean(axis=0), 0, 255).astype(np.uint8)
 
 
 def present(frame: np.ndarray, *, fps: float, show_fps: bool) -> np.ndarray:
@@ -91,6 +128,7 @@ def run(
         display = OpenCVDisplay(config.display)
 
     fps = FpsCounter()
+    session = Session()
     shown = 0
     try:
         while max_frames is None or shown < max_frames:
@@ -98,13 +136,22 @@ def run(
             if frame is None:
                 time.sleep(0.05)
                 continue
-            image = present(frame, fps=fps.tick(), show_fps=config.display.show_fps)
+            session.remember(frame, config.camera.hold_frames)
+            image = present(
+                session.output_frame(frame),
+                fps=fps.tick(),
+                show_fps=config.display.show_fps,
+            )
             key = display.show(image)
             shown += 1
             if key_matches(key, config.keys.quit):
                 return 0
             if key_matches(key, config.keys.fullscreen):
                 display.toggle_fullscreen()
+            elif key_matches(key, config.keys.hold):
+                session.hold()
+            elif key_matches(key, config.keys.release):
+                session.release()
     except KeyboardInterrupt:
         return 0
     finally:

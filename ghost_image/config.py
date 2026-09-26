@@ -46,6 +46,7 @@ class CameraConfig:
     height: int = 720
     fps: int = 30
     reconnect_failures: int = 30  # consecutive read failures before rediscovery
+    hold_frames: int = 4  # frames averaged into the held reference
 
 
 @dataclass
@@ -261,6 +262,7 @@ def _validate(cfg: Config) -> None:
     _check(cam.width > 0 and cam.height > 0, "camera.width and camera.height must be > 0")
     _check(cam.fps > 0, "camera.fps must be > 0")
     _check(cam.reconnect_failures >= 1, "camera.reconnect_failures must be >= 1")
+    _check(cam.hold_frames >= 1, "camera.hold_frames must be >= 1")
     _check(
         cam.preferred_index is None or cam.preferred_index >= 0,
         "camera.preferred_index must be >= 0 or null",

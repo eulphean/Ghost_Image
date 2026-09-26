@@ -5,7 +5,14 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from ghost_image.app import benchmark_capture, format_benchmark, present, run
+from ghost_image.app import (
+    Session,
+    average_frames,
+    benchmark_capture,
+    format_benchmark,
+    present,
+    run,
+)
 from ghost_image.config import Config
 
 
@@ -74,6 +81,38 @@ def test_present_draws_fps():
 def test_present_can_hide_fps():
     frame = np.zeros((40, 80, 3), np.uint8)
     assert np.array_equal(present(frame, fps=15.0, show_fps=False), frame)
+
+
+def test_average_frames_means_pixels():
+    dark = np.zeros((2, 2, 3), np.uint8)
+    bright = np.full((2, 2, 3), 100, np.uint8)
+    assert int(average_frames([dark, bright])[0, 0, 0]) == 50
+
+
+def test_space_freezes_the_frame_and_r_releases_it():
+    def solid(value: int) -> np.ndarray:
+        return np.full((80, 120, 3), value, np.uint8)
+
+    frames = [solid(10), solid(20), solid(30), solid(40)]
+    camera = FakeCamera(frames)
+    display = FakeDisplay([32, -1, ord("r"), ord("q")])
+    run(Config(), camera=camera, display=display)
+    # Frame 0 is still live. Frame 1 is the held average of the first frame.
+    assert int(display.shown[1][-1, -1, 0]) == 10
+    # Release is applied after frame 2 is drawn, so frame 3 is live again.
+    assert int(display.shown[3][-1, -1, 0]) == 40
+
+
+def test_hold_averages_the_recent_buffer():
+    session = Session()
+    session.remember(np.zeros((2, 2, 3), np.uint8), hold_frames=2)
+    session.remember(np.full((2, 2, 3), 100, np.uint8), hold_frames=2)
+    session.hold()
+    assert session.mode == "held"
+    assert int(session.held[0, 0, 0]) == 50
+    session.release()
+    assert session.mode == "live"
+    assert session.held is None
 
 
 def test_quit_key_stops_and_closes():

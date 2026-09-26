@@ -17,6 +17,7 @@ camera:
   height: 720
   fps: 30
   reconnect_failures: 30     # consecutive failed reads before re-detecting the camera
+  hold_frames: 4             # frames averaged when SPACE holds the reference
 
 processing:
   segmenter: mediapipe       # mediapipe | diff | hybrid

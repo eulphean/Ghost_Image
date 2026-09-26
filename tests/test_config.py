@@ -129,6 +129,7 @@ def test_roundtrip_to_yaml():
         ({"ghost": {"alpha": "high"}}, "expected number"),
         ({"ghost": {"alpha": 1.5}}, r"alpha must be in \[0, 1\]"),
         ({"camera": {"width": 0}}, "camera.width"),
+        ({"camera": {"hold_frames": 0}}, "hold_frames"),
         ({"camera": {"width": 12.5}}, "expected integer"),
         ({"camera": {"prefer_usb": "yes"}}, "expected true/false"),
         ({"camera": {"prefer_usb": 1}}, "expected true/false"),
