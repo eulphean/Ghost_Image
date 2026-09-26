@@ -30,6 +30,7 @@ processing:
   min_blob_area: 400         # drop detected regions smaller than this (pixels)
   diff_threshold: 30         # frame-difference segmenter sensitivity (0-255)
   hybrid_mode: refine        # union | intersect | refine (refine adds nearby motion to the ML mask)
+  background_adapt: 0.02     # how fast the diff mask absorbs lighting drift outside a person
 
 ghost:
   alpha: 0.45                # ghost opacity (0 = invisible, 1 = solid)

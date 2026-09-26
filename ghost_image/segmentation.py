@@ -39,7 +39,10 @@ def create_segmenter(config: Config) -> Segmenter:
     """Build the segmenter selected by ``config.processing.segmenter``."""
     kind = config.processing.segmenter
     if kind == "diff":
-        inner: Segmenter = DiffSegmenter(config.processing.diff_threshold)
+        inner: Segmenter = DiffSegmenter(
+            config.processing.diff_threshold,
+            adapt=config.processing.background_adapt,
+        )
     elif kind == "mediapipe":
         inner = _mediapipe(config)
     elif kind == "hybrid":
@@ -47,6 +50,7 @@ def create_segmenter(config: Config) -> Segmenter:
             _mediapipe(config),
             config.processing.hybrid_mode,
             config.processing.diff_threshold,
+            adapt=config.processing.background_adapt,
         )
     else:
         raise SegmentationError(f"unknown segmenter {kind!r}")
@@ -301,17 +305,41 @@ def combine_masks(model: np.ndarray, diff: np.ndarray, mode: str) -> np.ndarray:
 
 
 class DiffSegmenter(Segmenter):
-    """Classical difference against the held frame. No model required."""
+    """Classical difference against the held frame. No model required.
+
+    ``adapt`` slowly updates an internal background where no person is seen, so
+    daylight drift does not fill the mask. The image shown to the audience
+    stays the original held frame; only this comparison copy moves.
+    """
 
     name = "diff"
 
-    def __init__(self, threshold: int) -> None:
+    def __init__(self, threshold: int, adapt: float = 0.0) -> None:
         self.threshold = threshold
+        self.adapt = adapt
+        self._background: np.ndarray | None = None
 
     def mask(self, frame: np.ndarray, held: np.ndarray | None = None) -> np.ndarray:
         if held is None:
             return empty_mask(frame)
-        return difference_mask(frame, held, self.threshold)
+        if self.adapt <= 0:
+            return difference_mask(frame, held, self.threshold)
+        reference = held
+        if reference.shape[:2] != frame.shape[:2]:
+            reference = cv2.resize(
+                reference, (frame.shape[1], frame.shape[0]), interpolation=cv2.INTER_LINEAR
+            )
+        if self._background is None or self._background.shape != frame.shape:
+            self._background = reference.astype(np.float32)
+        mask = difference_mask(
+            frame, np.clip(self._background, 0, 255).astype(np.uint8), self.threshold
+        )
+        still = mask < 0.5
+        live = frame.astype(np.float32)
+        self._background[still] = (
+            self._background[still] * (1.0 - self.adapt) + live[still] * self.adapt
+        )
+        return mask
 
 
 class HybridSegmenter(Segmenter):
@@ -319,17 +347,16 @@ class HybridSegmenter(Segmenter):
 
     name = "hybrid"
 
-    def __init__(self, model: Segmenter, mode: str, threshold: int) -> None:
+    def __init__(self, model: Segmenter, mode: str, threshold: int, adapt: float = 0.0) -> None:
         self._model = model
+        self._diff = DiffSegmenter(threshold, adapt=adapt)
         self.mode = mode
-        self.threshold = threshold
 
     def mask(self, frame: np.ndarray, held: np.ndarray | None = None) -> np.ndarray:
         model_mask = self._model.mask(frame, held)
         if held is None:
             return model_mask
-        diff = difference_mask(frame, held, self.threshold)
-        return combine_masks(model_mask, diff, self.mode)
+        return combine_masks(model_mask, self._diff.mask(frame, held), self.mode)
 
     def close(self) -> None:
         self._model.close()

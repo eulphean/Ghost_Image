@@ -143,6 +143,7 @@ def test_roundtrip_to_yaml():
         ({"processing": {"mask_smoothing": 1.0}}, r"mask_smoothing must be in \[0, 1\)"),
         ({"processing": {"diff_threshold": 300}}, "diff_threshold"),
         ({"processing": {"hybrid_mode": "magic"}}, "hybrid_mode"),
+        ({"processing": {"background_adapt": 1}}, "background_adapt"),
         ({"glow": {"color": [255, 255]}}, "three integers"),
         ({"glow": {"color": [255, 255, 256]}}, "three integers"),
         ({"glow": {"color": "white"}}, "expected list"),

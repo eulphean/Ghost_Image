@@ -64,6 +64,7 @@ class ProcessingConfig:
     min_blob_area: int = 400  # remove connected components smaller than this
     diff_threshold: int = 30  # frame-difference segmenter threshold (0-255)
     hybrid_mode: str = "refine"  # union | intersect | refine
+    background_adapt: float = 0.02  # diff-segmenter drift rate outside the person (0 = off)
 
 
 @dataclass
@@ -284,6 +285,10 @@ def _validate(cfg: Config) -> None:
     _check(
         proc.hybrid_mode in HYBRID_MODES,
         f"processing.hybrid_mode must be one of {HYBRID_MODES}",
+    )
+    _check(
+        0.0 <= proc.background_adapt < 1.0,
+        "processing.background_adapt must be in [0, 1)",
     )
 
     _check(0.0 <= ghost.alpha <= 1.0, "ghost.alpha must be in [0, 1]")

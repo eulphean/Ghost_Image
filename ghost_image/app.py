@@ -323,7 +323,10 @@ def _fallback_segmenter(
     if previous is not None:
         previous.close()
     segmenter = ProcessedSegmenter(
-        DiffSegmenter(config.processing.diff_threshold),
+        DiffSegmenter(
+            config.processing.diff_threshold,
+            adapt=config.processing.background_adapt,
+        ),
         config.processing,
     )
     session.segmenter_name = segmenter.name

@@ -9,6 +9,7 @@ import pytest
 
 from ghost_image.config import Config, ProcessingConfig, config_from_dict
 from ghost_image.segmentation import (
+    DiffSegmenter,
     MediaPipeSegmenter,
     SegmentationError,
     combine_masks,
@@ -147,6 +148,16 @@ def test_difference_mask_is_zero_for_identical_frames_and_one_on_a_change():
     mask = difference_mask(changed, held, threshold=30)
     assert float(mask[10, 10]) == 1.0
     assert float(mask[0, 0]) == 0.0
+
+
+def test_background_adapt_follows_empty_scene_and_leaves_the_held_frame():
+    segmenter = DiffSegmenter(threshold=255, adapt=0.5)
+    held = np.zeros((4, 4, 3), np.uint8)
+    frame = np.full((4, 4, 3), 100, np.uint8)
+    mask = segmenter.mask(frame, held)
+    assert float(mask.max()) == 0.0
+    assert int(held[0, 0, 0]) == 0
+    assert float(segmenter._background[0, 0, 0]) == pytest.approx(50.0)
 
 
 def test_refine_adds_a_nearby_finger_and_drops_a_distant_speck():
