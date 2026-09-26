@@ -26,6 +26,7 @@ processing:
   mask_threshold: 0.5        # where the soft mask becomes "person" for contours
   mask_smoothing: 0.5        # temporal smoothing, weight of previous mask (0 = off)
   feather_px: 7              # soften mask edges
+  morph_px: 5                # open then close, to drop specks and fill small holes
   min_blob_area: 400         # drop detected regions smaller than this (pixels)
   diff_threshold: 30         # frame-difference segmenter sensitivity (0-255)
 

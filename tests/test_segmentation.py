@@ -7,7 +7,7 @@ import time
 import numpy as np
 import pytest
 
-from ghost_image.config import Config, config_from_dict
+from ghost_image.config import Config, ProcessingConfig, config_from_dict
 from ghost_image.segmentation import (
     MediaPipeSegmenter,
     SegmentationError,
@@ -15,6 +15,7 @@ from ghost_image.segmentation import (
     empty_mask,
     ensure_mask,
     person_from_confidences,
+    postprocess,
     resize_to_width,
 )
 
@@ -74,6 +75,49 @@ def test_mediapipe_factory_requires_the_model(tmp_path):
 
 def test_factory_uses_the_configured_name():
     assert Config().processing.segmenter == "mediapipe"
+
+
+def _clean(**overrides: object) -> ProcessingConfig:
+    processing = ProcessingConfig(
+        feather_px=0,
+        morph_px=0,
+        mask_smoothing=0.0,
+        min_blob_area=0,
+    )
+    for key, value in overrides.items():
+        setattr(processing, key, value)
+    return processing
+
+
+def test_postprocess_drops_specks_and_keeps_the_body():
+    mask = np.zeros((40, 40), np.float32)
+    mask[0:2, 0:2] = 1.0
+    mask[10:30, 10:30] = 1.0
+    out = postprocess(mask, None, _clean(min_blob_area=50))
+    assert float(out[0, 0]) == 0.0
+    assert float(out[20, 20]) == 1.0
+
+
+def test_postprocess_closes_small_holes():
+    mask = np.ones((21, 21), np.float32)
+    mask[9:12, 9:12] = 0.0
+    out = postprocess(mask, None, _clean(morph_px=5))
+    assert float(out[10, 10]) == 1.0
+
+
+def test_postprocess_feathers_the_edge():
+    mask = np.zeros((31, 31), np.float32)
+    mask[8:24, 8:24] = 1.0
+    out = postprocess(mask, None, _clean(feather_px=7))
+    assert float(out[15, 15]) == pytest.approx(1.0, abs=0.05)
+    assert 0.0 < float(out[7, 15]) < 1.0
+
+
+def test_postprocess_smooths_toward_the_previous_mask():
+    previous = np.ones((4, 4), np.float32)
+    current = np.zeros((4, 4), np.float32)
+    out = postprocess(current, previous, _clean(mask_smoothing=0.5))
+    assert float(out[0, 0]) == pytest.approx(0.5)
 
 
 def test_resize_to_width_keeps_aspect():

@@ -59,6 +59,7 @@ class ProcessingConfig:
     mask_threshold: float = 0.5  # binarisation threshold for contours
     mask_smoothing: float = 0.5  # EMA weight of previous mask (0 = off)
     feather_px: int = 7  # Gaussian feathering of mask edges (odd, 0 = off)
+    morph_px: int = 5  # open/close kernel (odd, 0 = off)
     min_blob_area: int = 400  # remove connected components smaller than this
     diff_threshold: int = 30  # frame-difference segmenter threshold (0-255)
 
@@ -274,6 +275,7 @@ def _validate(cfg: Config) -> None:
     _check(0.0 <= proc.mask_threshold <= 1.0, "processing.mask_threshold must be in [0, 1]")
     _check(0.0 <= proc.mask_smoothing < 1.0, "processing.mask_smoothing must be in [0, 1)")
     _check_kernel("processing.feather_px", proc.feather_px)
+    _check_kernel("processing.morph_px", proc.morph_px)
     _check(proc.min_blob_area >= 0, "processing.min_blob_area must be >= 0")
     _check(0 <= proc.diff_threshold <= 255, "processing.diff_threshold must be in [0, 255]")
 

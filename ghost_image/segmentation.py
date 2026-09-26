@@ -14,7 +14,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-from ghost_image.config import PROJECT_ROOT, SEGMENTERS, Config
+from ghost_image.config import PROJECT_ROOT, SEGMENTERS, Config, ProcessingConfig
 
 
 class SegmentationError(RuntimeError):
@@ -40,7 +40,8 @@ def create_segmenter(config: Config) -> Segmenter:
     kind = config.processing.segmenter
     if kind == "mediapipe":
         path = PROJECT_ROOT / config.paths.models_dir / config.paths.model_file
-        return MediaPipeSegmenter(path, config.processing.width)
+        inner: Segmenter = MediaPipeSegmenter(path, config.processing.width)
+        return ProcessedSegmenter(inner, config.processing)
     if kind not in SEGMENTERS:
         raise SegmentationError(f"unknown segmenter {kind!r}")
     raise SegmentationError(f"segmenter {kind!r} is not available yet")
@@ -84,6 +85,65 @@ def person_from_confidences(masks: list[np.ndarray]) -> np.ndarray:
     else:
         person = 1.0 - np.squeeze(masks[0])
     return np.clip(np.array(person, dtype=np.float32, copy=True), 0.0, 1.0)
+
+
+def postprocess(
+    mask: np.ndarray,
+    previous: np.ndarray | None,
+    processing: ProcessingConfig,
+) -> np.ndarray:
+    """Binarise, clean, feather, and temporally smooth a person mask.
+
+    Morphology and blob removal run on a hard mask. Feathering and the
+    exponential average put the soft edge back, which is what the compositor
+    blends with.
+    """
+    hard = (mask >= processing.mask_threshold).astype(np.uint8) * 255
+    if processing.morph_px:
+        kernel = cv2.getStructuringElement(
+            cv2.MORPH_ELLIPSE, (processing.morph_px, processing.morph_px)
+        )
+        hard = cv2.morphologyEx(hard, cv2.MORPH_OPEN, kernel)
+        hard = cv2.morphologyEx(hard, cv2.MORPH_CLOSE, kernel)
+    if processing.min_blob_area > 0:
+        hard = _drop_small_blobs(hard, processing.min_blob_area)
+    soft = hard.astype(np.float32) / 255.0
+    if processing.feather_px:
+        soft = cv2.GaussianBlur(soft, (processing.feather_px, processing.feather_px), 0)
+    if previous is not None and processing.mask_smoothing > 0:
+        weight = processing.mask_smoothing
+        soft = previous * weight + soft * (1.0 - weight)
+    return np.clip(soft, 0.0, 1.0).astype(np.float32, copy=False)
+
+
+def _drop_small_blobs(hard: np.ndarray, min_area: int) -> np.ndarray:
+    binary = (hard > 0).astype(np.uint8)
+    count, labels, stats, _centroids = cv2.connectedComponentsWithStats(binary, connectivity=8)
+    if count <= 1:
+        return hard
+    areas = stats[:, cv2.CC_STAT_AREA].copy()
+    areas[0] = 0  # background label
+    keep = (areas >= min_area).astype(np.uint8)
+    return hard * keep[labels]
+
+
+class ProcessedSegmenter(Segmenter):
+    """Applies :func:`postprocess` to another segmenter's mask."""
+
+    def __init__(self, inner: Segmenter, processing: ProcessingConfig) -> None:
+        self._inner = inner
+        self._processing = processing
+        self._previous: np.ndarray | None = None
+        self.name = inner.name
+
+    def mask(self, frame: np.ndarray, held: np.ndarray | None = None) -> np.ndarray:
+        raw = self._inner.mask(frame, held)
+        cleaned = postprocess(raw, self._previous, self._processing)
+        self._previous = cleaned
+        return cleaned
+
+    def close(self) -> None:
+        self._inner.close()
 
 
 def mask_to_bgr(mask: np.ndarray) -> np.ndarray:

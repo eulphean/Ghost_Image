@@ -138,6 +138,7 @@ def test_roundtrip_to_yaml():
         ({"camera": {"preferred_index": 1.5}}, "expected int, str or null"),
         ({"processing": {"segmenter": "magic"}}, "processing.segmenter"),
         ({"processing": {"feather_px": 4}}, "positive odd"),
+        ({"processing": {"morph_px": 4}}, "positive odd"),
         ({"processing": {"mask_smoothing": 1.0}}, r"mask_smoothing must be in \[0, 1\)"),
         ({"processing": {"diff_threshold": 300}}, "diff_threshold"),
         ({"glow": {"color": [255, 255]}}, "three integers"),
