@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import math
+
 import cv2
 import numpy as np
 
-from ghost_image.config import GhostConfig
+from ghost_image.config import GhostConfig, GlowConfig
 
 
 def stylise(frame: np.ndarray, ghost: GhostConfig) -> np.ndarray:
@@ -45,3 +47,28 @@ def composite(
     ghost_px = stylise(frame, ghost)
     blended = held.astype(np.float32) * (1.0 - coverage) + ghost_px * coverage
     return np.clip(blended, 0, 255).astype(np.uint8)
+
+
+def glow_layer(mask: np.ndarray, glow: GlowConfig, threshold: float, now: float) -> np.ndarray:
+    """A soft coloured halo around the person contour. Additive, float BGR."""
+    height, width = mask.shape[:2]
+    if not glow.enabled:
+        return np.zeros((height, width, 3), np.float32)
+    hard = (mask >= threshold).astype(np.uint8)
+    contours, _hierarchy = cv2.findContours(hard, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    edge = np.zeros((height, width), np.uint8)
+    if contours:
+        cv2.drawContours(edge, contours, -1, 255, thickness=glow.thickness)
+    if glow.blur_px:
+        edge = cv2.GaussianBlur(edge, (glow.blur_px, glow.blur_px), 0)
+    intensity = glow.intensity
+    if glow.pulse:
+        wave = math.sin(2.0 * math.pi * now / glow.pulse_period_s)
+        intensity *= 0.65 + 0.35 * wave
+    color = np.array(glow.color, dtype=np.float32) * intensity
+    return (edge.astype(np.float32) / 255.0)[..., None] * color
+
+
+def add_glow(image: np.ndarray, layer: np.ndarray) -> np.ndarray:
+    """Add an HDR-style halo onto an 8-bit image."""
+    return np.clip(image.astype(np.float32) + layer, 0, 255).astype(np.uint8)

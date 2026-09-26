@@ -17,7 +17,7 @@ from typing import Protocol
 import numpy as np
 
 from ghost_image.camera import open_camera
-from ghost_image.compositor import composite
+from ghost_image.compositor import add_glow, composite, glow_layer
 from ghost_image.config import Config
 from ghost_image.segmentation import (
     SegmentationError,
@@ -165,6 +165,15 @@ def run(
                 visual = mask_to_bgr(mask)
             elif mask is not None and session.held is not None:
                 visual = composite(session.held, frame, mask, config.ghost, session.alpha)
+                visual = add_glow(
+                    visual,
+                    glow_layer(
+                        mask,
+                        config.glow,
+                        config.processing.mask_threshold,
+                        time.perf_counter(),
+                    ),
+                )
             image = present(
                 visual,
                 fps=fps.tick(),

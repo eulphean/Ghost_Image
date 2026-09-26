@@ -5,8 +5,8 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from ghost_image.compositor import composite, stylise
-from ghost_image.config import GhostConfig
+from ghost_image.compositor import add_glow, composite, glow_layer, stylise
+from ghost_image.config import GhostConfig, GlowConfig
 
 
 def plain_ghost() -> GhostConfig:
@@ -47,6 +47,34 @@ def test_stylise_desaturates_a_pure_channel():
     # Grey of pure red is equal channels, below the original red.
     assert out[0, 0, 0] == pytest.approx(out[0, 0, 1])
     assert out[0, 0, 2] < 200
+
+
+def test_glow_traces_the_contour_and_not_the_interior():
+    mask = np.zeros((40, 40), np.float32)
+    mask[10:30, 10:30] = 1.0
+    glow = GlowConfig(
+        enabled=True,
+        color=[255, 255, 255],
+        thickness=1,
+        blur_px=0,
+        intensity=1.0,
+        pulse=False,
+    )
+    layer = glow_layer(mask, glow, threshold=0.5, now=0.0)
+    assert float(layer[20, 20].sum()) == 0.0
+    assert float(layer[10, 20, 0]) > 200
+    assert float(layer[0, 0].sum()) == 0.0
+    image = add_glow(np.zeros((40, 40, 3), np.uint8), layer)
+    assert int(image[10, 20, 0]) > 200
+    assert int(image[20, 20, 0]) == 0
+
+
+def test_glow_pulse_changes_intensity():
+    mask = np.ones((8, 8), np.float32)
+    glow = GlowConfig(blur_px=0, thickness=1, pulse=True, pulse_period_s=4.0, intensity=1.0)
+    quiet = glow_layer(mask, glow, 0.5, now=0.0)
+    loud = glow_layer(mask, glow, 0.5, now=1.0)
+    assert float(loud.max()) > float(quiet.max())
 
 
 def test_composite_resizes_a_smaller_held_frame():

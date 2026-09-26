@@ -161,9 +161,9 @@ def test_held_person_is_blended_over_the_reference(monkeypatch):
     bright = np.full((80, 120, 3), 200, np.uint8)
     display = FakeDisplay([32, ord("q")])
     run(Config(), camera=FakeCamera([black, bright]), display=display)
-    # The second frame is the ghost blend, neither the black reference nor the person.
-    corner = int(display.shown[1][-1, -1, 0])
-    assert 0 < corner < 200
+    # Centre of the second frame is the ghost blend, clear of the contour glow.
+    centre = int(display.shown[1][40, 60, 0])
+    assert 0 < centre < 200
 
 
 def test_debug_view_shows_the_mask_once_a_frame_is_held():
