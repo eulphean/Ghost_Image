@@ -1,0 +1,30 @@
+# Virtual environments (rebuilt per machine from requirements.txt)
+.venv/
+venv/
+env/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+build/
+dist/
+
+# Downloaded model binaries (fetched by scripts/download_models.sh)
+models/*.tflite
+models/*.task
+
+# Runtime output
+captures/
+logs/
+*.log
+
+# Local config overrides
+config.local.yaml
+
+# OS / editor
+.DS_Store
+.vscode/
+.idea/
