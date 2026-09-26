@@ -17,6 +17,7 @@ from typing import Protocol
 import numpy as np
 
 from ghost_image.camera import open_camera
+from ghost_image.compositor import composite
 from ghost_image.config import Config
 from ghost_image.segmentation import (
     SegmentationError,
@@ -52,6 +53,7 @@ class Session:
     held: np.ndarray | None = None
     debug: bool = False
     segment_error: bool = False
+    alpha: float = 0.45
     recent: deque[np.ndarray] = field(default_factory=deque)
 
     def remember(self, frame: np.ndarray, hold_frames: int) -> None:
@@ -141,6 +143,7 @@ def run(
     fps = FpsCounter()
     session = Session()
     session.debug = config.display.debug
+    session.alpha = config.ghost.alpha
     path = held_frame_path(config)
     segmenter = None
     if config.paths.restore_held:
@@ -160,6 +163,8 @@ def run(
             visual = session.output_frame(frame)
             if session.debug and mask is not None:
                 visual = mask_to_bgr(mask)
+            elif mask is not None and session.held is not None:
+                visual = composite(session.held, frame, mask, config.ghost, session.alpha)
             image = present(
                 visual,
                 fps=fps.tick(),
@@ -181,6 +186,10 @@ def run(
                 delete_held_frame(path)
             elif key_matches(key, config.keys.debug):
                 session.debug = not session.debug
+            elif key_matches(key, config.keys.opacity_down):
+                session.alpha = max(0.0, session.alpha - config.ghost.alpha_step)
+            elif key_matches(key, config.keys.opacity_up):
+                session.alpha = min(1.0, session.alpha + config.ghost.alpha_step)
     except KeyboardInterrupt:
         return 0
     finally:

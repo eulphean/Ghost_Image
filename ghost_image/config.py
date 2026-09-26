@@ -73,6 +73,7 @@ class GhostConfig:
     desaturate: float = 0.7  # 0 = original colour, 1 = greyscale
     tint: list[int] = field(default_factory=lambda: [255, 230, 200])  # BGR
     tint_strength: float = 0.25
+    brightness: float = 1.08  # slight lift so the ghost reads lighter than the room
     blur_px: int = 0  # soften the ghost body (odd, 0 = off)
 
 
@@ -283,6 +284,7 @@ def _validate(cfg: Config) -> None:
     _check(0.0 < ghost.alpha_step <= 1.0, "ghost.alpha_step must be in (0, 1]")
     _check(0.0 <= ghost.desaturate <= 1.0, "ghost.desaturate must be in [0, 1]")
     _check(0.0 <= ghost.tint_strength <= 1.0, "ghost.tint_strength must be in [0, 1]")
+    _check(ghost.brightness > 0.0, "ghost.brightness must be > 0")
     _check_color("ghost.tint", ghost.tint)
     _check_kernel("ghost.blur_px", ghost.blur_px)
 

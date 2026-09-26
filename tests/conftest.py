@@ -19,6 +19,7 @@ class _ZeroSegmenter(Segmenter):
 
 
 @pytest.fixture(autouse=True)
-def _no_real_segmenter(monkeypatch):
-    """App tests that hold a frame must not download or load MediaPipe."""
+def _no_real_segmenter(monkeypatch, tmp_path):
+    """App tests must not load MediaPipe or write the project's captures/ folder."""
     monkeypatch.setattr("ghost_image.app.create_segmenter", lambda _config: _ZeroSegmenter())
+    monkeypatch.setattr("ghost_image.app.held_frame_path", lambda _config: tmp_path / "held.png")

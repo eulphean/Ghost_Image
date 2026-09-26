@@ -148,6 +148,24 @@ def test_release_deletes_the_saved_frame(tmp_path, monkeypatch):
     assert not path.exists()
 
 
+def test_held_person_is_blended_over_the_reference(monkeypatch):
+    class Solid:
+        def mask(self, frame, held=None):
+            return np.ones(frame.shape[:2], np.float32)
+
+        def close(self) -> None:
+            return None
+
+    monkeypatch.setattr("ghost_image.app.create_segmenter", lambda _config: Solid())
+    black = np.zeros((80, 120, 3), np.uint8)
+    bright = np.full((80, 120, 3), 200, np.uint8)
+    display = FakeDisplay([32, ord("q")])
+    run(Config(), camera=FakeCamera([black, bright]), display=display)
+    # The second frame is the ghost blend, neither the black reference nor the person.
+    corner = int(display.shown[1][-1, -1, 0])
+    assert 0 < corner < 200
+
+
 def test_debug_view_shows_the_mask_once_a_frame_is_held():
     white = np.full((80, 120, 3), 200, np.uint8)
     camera = FakeCamera([white, white, white])

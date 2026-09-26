@@ -36,6 +36,7 @@ ghost:
   desaturate: 0.7            # 0 = full colour, 1 = greyscale
   tint: [255, 230, 200]      # BGR tint applied to the ghost body
   tint_strength: 0.25
+  brightness: 1.08           # lift the ghost slightly above the room
   blur_px: 0                 # soften the ghost body
 
 glow:

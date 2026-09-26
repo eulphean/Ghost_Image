@@ -128,6 +128,7 @@ def test_roundtrip_to_yaml():
         ({"ghost": "not a mapping"}, "must be a mapping"),
         ({"ghost": {"alpha": "high"}}, "expected number"),
         ({"ghost": {"alpha": 1.5}}, r"alpha must be in \[0, 1\]"),
+        ({"ghost": {"brightness": 0}}, "brightness"),
         ({"camera": {"width": 0}}, "camera.width"),
         ({"camera": {"hold_frames": 0}}, "hold_frames"),
         ({"camera": {"width": 12.5}}, "expected integer"),
