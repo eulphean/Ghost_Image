@@ -50,29 +50,28 @@ modification; platform differences are isolated behind small abstractions.
 
 ## Repository layout
 
-Files marked `(planned)` do not exist yet; see `docs/PLAN.md` for the phase
-that adds them.
-
 ```
 Ghost_Image/
 ├── AGENTS.md              # this file
-├── README.md              # setup + run instructions (Mac and Pi)
+├── README.md              # setup, operation, troubleshooting (Mac and Pi)
 ├── pyproject.toml         # project metadata, ruff/black/pytest settings
 ├── docs/
-│   └── PLAN.md            # step‑by‑step development plan
+│   ├── PLAN.md            # step‑by‑step development plan
+│   └── BENCHMARKS.md      # measured segmenter FPS
 ├── ghost_image/           # application package
-│   ├── __init__.py        # __version__
 │   ├── __main__.py        # entry point: python -m ghost_image
-│   ├── config.py          # load/validate config (Config dataclasses)
-│   ├── app.py             # (planned) main loop / state machine
-│   ├── camera.py          # (planned) cross‑platform USB camera discovery + capture
-│   ├── segmentation.py    # (planned) person mask (MediaPipe + fallback)
-│   ├── compositor.py      # (planned) ghost blending + contour glow
-│   └── ui.py              # (planned) window, overlays, key handling
-├── models/                # downloaded .tflite segmentation models (git‑ignored)
-├── scripts/
-│   └── pi_setup.sh        # Pi: apt packages + venv + pip install
-├── tests/                 # pytest unit tests; never require a camera
+│   ├── app.py             # main loop / hold state
+│   ├── camera.py          # USB camera discovery + capture
+│   ├── segmentation.py    # MediaPipe, diff, and hybrid masks
+│   ├── compositor.py      # ghost blend + contour glow
+│   ├── ui.py              # window, overlays, keys
+│   ├── config.py          # load/validate config
+│   ├── gpio.py            # optional Pi buttons
+│   ├── store.py           # held frame and snapshots
+│   └── log.py             # rotating log + stage timings
+├── models/                # downloaded .tflite models (git‑ignored)
+├── scripts/               # pi_setup, model download, kiosk service
+├── tests/                 # pytest; never requires a camera
 ├── config.yaml            # all tunables, documented inline
 ├── config.local.yaml      # optional per‑machine overrides (git‑ignored)
 └── requirements.txt       # pinned deps with Mac arm64 + Linux aarch64 wheels
