@@ -1,0 +1,16 @@
+[Unit]
+Description=Ghost Image installation
+After=graphical-session.target
+Wants=graphical-session.target
+
+[Service]
+Type=simple
+WorkingDirectory=@ROOT@
+ExecStartPre=@ROOT@/scripts/disable_blanking.sh
+ExecStart=@ROOT@/.venv/bin/python -m ghost_image
+Restart=on-failure
+RestartSec=2
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=graphical-session.target
