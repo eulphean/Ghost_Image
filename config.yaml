@@ -64,6 +64,11 @@ paths:
   restore_held: true         # reload the last held frame at startup
   log_file: logs/ghost_image.log
 
+gpio:
+  enabled: false             # set true on the Pi when two buttons are wired
+  hold_pin: 17               # BCM pin, press to hold the current frame
+  release_pin: 27            # BCM pin, press to release it
+
 keys:
   hold: [space]
   release: [r]

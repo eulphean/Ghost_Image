@@ -150,6 +150,7 @@ def test_roundtrip_to_yaml():
         ({"glow": {"blur_px": 20}}, "positive odd"),
         ({"glow": {"thickness": 0}}, "glow.thickness"),
         ({"display": {"window_name": 42}}, "expected string"),
+        ({"gpio": {"hold_pin": 40}}, "hold_pin"),
         ({"keys": {"quit": []}}, "non-empty list"),
         ({"keys": {"quit": ["q", 7]}}, "non-empty list"),
     ],

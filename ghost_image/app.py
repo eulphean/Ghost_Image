@@ -19,6 +19,7 @@ import numpy as np
 from ghost_image.camera import open_camera
 from ghost_image.compositor import add_glow, composite, glow_layer
 from ghost_image.config import Config
+from ghost_image.gpio import GpioControls
 from ghost_image.log import StageTimer, report_error
 from ghost_image.segmentation import (
     DiffSegmenter,
@@ -197,6 +198,7 @@ def run(
     camera: FrameSource | None = None,
     display: Display | None = None,
     max_frames: int | None = None,
+    buttons: GpioControls | None = None,
 ) -> int:
     """Show the live feed until quit, Ctrl-C, or ``max_frames`` frames."""
     owns_camera = camera is None
@@ -212,6 +214,7 @@ def run(
     session.alpha = config.ghost.alpha
     path = held_frame_path(config)
     segmenter = None
+    controls = buttons if buttons is not None else GpioControls(config.gpio)
     if config.paths.restore_held:
         restored = load_held_frame(path)
         if restored is not None:
@@ -277,12 +280,21 @@ def run(
                     session.alpha = max(0.0, session.alpha - config.ghost.alpha_step)
                 elif key_matches(key, config.keys.opacity_up):
                     session.alpha = min(1.0, session.alpha + config.ghost.alpha_step)
+                action = controls.poll()
+                if action == "hold":
+                    session.hold()
+                    if session.held is not None:
+                        save_held_frame(path, session.held)
+                elif action == "release":
+                    session.release()
+                    delete_held_frame(path)
             except Exception as exc:  # noqa: BLE001 - keep the installation up
                 _note_loop_error(session, exc)
                 time.sleep(0.05)
     except KeyboardInterrupt:
         return 0
     finally:
+        controls.close()
         if segmenter is not None:
             segmenter.close()
         if owns_camera:

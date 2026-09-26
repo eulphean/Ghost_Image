@@ -112,6 +112,15 @@ class PathsConfig:
 
 
 @dataclass
+class GpioConfig:
+    """Optional BCM buttons on the Pi. Off unless ``enabled`` is true."""
+
+    enabled: bool = False
+    hold_pin: int = 17
+    release_pin: int = 27
+
+
+@dataclass
 class KeysConfig:
     """Keyboard bindings. Each entry is a list of key names accepted by ``ui``."""
 
@@ -133,6 +142,7 @@ class Config:
     glow: GlowConfig = field(default_factory=GlowConfig)
     display: DisplayConfig = field(default_factory=DisplayConfig)
     paths: PathsConfig = field(default_factory=PathsConfig)
+    gpio: GpioConfig = field(default_factory=GpioConfig)
     keys: KeysConfig = field(default_factory=KeysConfig)
 
     def to_dict(self) -> dict[str, Any]:
@@ -305,6 +315,10 @@ def _validate(cfg: Config) -> None:
     _check_kernel("glow.blur_px", glow.blur_px)
     _check(glow.intensity >= 0.0, "glow.intensity must be >= 0")
     _check(glow.pulse_period_s > 0.0, "glow.pulse_period_s must be > 0")
+
+    for pin_name in ("hold_pin", "release_pin"):
+        pin = getattr(cfg.gpio, pin_name)
+        _check(0 <= pin <= 27, f"gpio.{pin_name} must be a BCM number from 0 to 27")
 
     for f in fields(keys):
         value = getattr(keys, f.name)
