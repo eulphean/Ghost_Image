@@ -74,7 +74,9 @@ python -m ghost_image -c other.yaml  # use a different config file
 frame the camera is looking at, and `R` to release it. The held frame is
 written to `captures/held.png` and loaded again on the next launch
 (`--no-restore-held` skips that). `F` toggles fullscreen. `Q` or `Esc` quits.
-The corner shows `LIVE` or `HELD` plus the FPS.
+The corner shows `LIVE` or `HELD`, the FPS, opacity, and the segmenter.
+`D` cycles the view (composite, live, mask, held frame). `S` saves a snapshot
+of the current view to `captures/`. `[` and `]` change how solid the ghost is.
 
 ## Configuration
 

@@ -14,6 +14,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Protocol
 
+import cv2
 import numpy as np
 
 from ghost_image.camera import open_camera
@@ -25,7 +26,14 @@ from ghost_image.segmentation import (
     create_segmenter,
     mask_to_bgr,
 )
-from ghost_image.store import delete_held_frame, held_frame_path, load_held_frame, save_held_frame
+from ghost_image.store import (
+    delete_held_frame,
+    held_frame_path,
+    load_held_frame,
+    save_held_frame,
+    save_snapshot,
+    snapshot_path,
+)
 from ghost_image.ui import FpsCounter, OpenCVDisplay, draw_overlay, key_matches
 
 
@@ -51,7 +59,8 @@ class Session:
 
     mode: str = "live"
     held: np.ndarray | None = None
-    debug: bool = False
+    view: str = "composite"
+    segmenter_name: str = "none"
     segment_error: bool = False
     alpha: float = 0.45
     recent: deque[np.ndarray] = field(default_factory=deque)
@@ -83,12 +92,65 @@ def average_frames(frames: list[np.ndarray]) -> np.ndarray:
     return np.clip(stacked.mean(axis=0), 0, 255).astype(np.uint8)
 
 
-def present(frame: np.ndarray, *, fps: float, show_fps: bool, mode: str = "live") -> np.ndarray:
-    """Build the image shown for this frame, with the LIVE/HELD indicator."""
+VIEWS = ("composite", "live", "mask", "held")
+
+
+def cycle_view(view: str) -> str:
+    """Step D through live, mask, held frame, and the final composite."""
+    try:
+        index = VIEWS.index(view)
+    except ValueError:
+        index = 0
+    return VIEWS[(index + 1) % len(VIEWS)]
+
+
+def present(
+    frame: np.ndarray,
+    *,
+    fps: float,
+    show_fps: bool,
+    mode: str = "live",
+    detail: str | None = None,
+) -> np.ndarray:
+    """Build the image shown for this frame, with the status readout."""
     lines = [mode.upper()]
     if show_fps:
         lines.append(f"{fps:4.1f} fps")
+    if detail:
+        lines.append(detail)
     return draw_overlay(frame, lines)
+
+
+def _view_frame(
+    session: Session,
+    frame: np.ndarray,
+    mask: np.ndarray | None,
+    config: Config,
+) -> np.ndarray:
+    """Pick the image for the current debug view."""
+    blended = None
+    if mask is not None and session.held is not None:
+        blended = composite(session.held, frame, mask, config.ghost, session.alpha)
+        blended = add_glow(
+            blended,
+            glow_layer(mask, config.glow, config.processing.mask_threshold, time.perf_counter()),
+        )
+    if session.view == "live":
+        return frame
+    if session.view == "mask":
+        if mask is None:
+            return np.zeros_like(frame)
+        return mask_to_bgr(mask)
+    if session.view == "held":
+        if session.held is None:
+            return np.zeros_like(frame)
+        held = session.held
+        if held.shape[:2] != frame.shape[:2]:
+            held = cv2.resize(held, (frame.shape[1], frame.shape[0]))
+        return held
+    if blended is not None:
+        return blended
+    return session.output_frame(frame)
 
 
 def benchmark_capture(
@@ -142,7 +204,7 @@ def run(
 
     fps = FpsCounter()
     session = Session()
-    session.debug = config.display.debug
+    session.view = "mask" if config.display.debug else "composite"
     session.alpha = config.ghost.alpha
     path = held_frame_path(config)
     segmenter = None
@@ -160,25 +222,16 @@ def run(
                 continue
             session.remember(frame, config.camera.hold_frames)
             mask, segmenter = _person_mask(session, frame, config, segmenter)
-            visual = session.output_frame(frame)
-            if session.debug and mask is not None:
-                visual = mask_to_bgr(mask)
-            elif mask is not None and session.held is not None:
-                visual = composite(session.held, frame, mask, config.ghost, session.alpha)
-                visual = add_glow(
-                    visual,
-                    glow_layer(
-                        mask,
-                        config.glow,
-                        config.processing.mask_threshold,
-                        time.perf_counter(),
-                    ),
-                )
+            visual = _view_frame(session, frame, mask, config)
             image = present(
                 visual,
                 fps=fps.tick(),
                 show_fps=config.display.show_fps,
                 mode=session.mode,
+                detail=(
+                    f"a={session.alpha:.2f} glow={config.glow.intensity:.1f} "
+                    f"{session.segmenter_name} {session.view}"
+                ),
             )
             key = display.show(image)
             shown += 1
@@ -194,7 +247,10 @@ def run(
                 session.release()
                 delete_held_frame(path)
             elif key_matches(key, config.keys.debug):
-                session.debug = not session.debug
+                session.view = cycle_view(session.view)
+            elif key_matches(key, config.keys.snapshot):
+                stamp = time.strftime("%Y%m%d-%H%M%S")
+                save_snapshot(snapshot_path(config, stamp), visual)
             elif key_matches(key, config.keys.opacity_down):
                 session.alpha = max(0.0, session.alpha - config.ghost.alpha_step)
             elif key_matches(key, config.keys.opacity_up):
@@ -226,6 +282,7 @@ def _person_mask(
     if segmenter is None and not session.segment_error:
         try:
             segmenter = create_segmenter(config)
+            session.segmenter_name = getattr(segmenter, "name", "segmenter")
         except SegmentationError as exc:
             print(f"error: {exc}", file=sys.stderr)
             session.segment_error = True

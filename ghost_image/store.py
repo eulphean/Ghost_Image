@@ -31,3 +31,13 @@ def load_held_frame(path: Path) -> np.ndarray | None:
 
 def delete_held_frame(path: Path) -> None:
     path.unlink(missing_ok=True)
+
+
+def snapshot_path(config: Config, stamp: str) -> Path:
+    return PROJECT_ROOT / config.paths.captures_dir / f"snapshot-{stamp}.png"
+
+
+def save_snapshot(path: Path, frame: np.ndarray) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if not cv2.imwrite(str(path), frame):
+        raise OSError(f"could not write snapshot to {path}")

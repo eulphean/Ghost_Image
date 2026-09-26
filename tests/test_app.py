@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import cv2
 import numpy as np
 import pytest
 
@@ -9,6 +10,7 @@ from ghost_image.app import (
     Session,
     average_frames,
     benchmark_capture,
+    cycle_view,
     format_benchmark,
     present,
     run,
@@ -99,16 +101,16 @@ def test_average_frames_means_pixels():
 
 def test_space_freezes_the_frame_and_r_releases_it():
     def solid(value: int) -> np.ndarray:
-        return np.full((80, 120, 3), value, np.uint8)
+        return np.full((200, 240, 3), value, np.uint8)
 
     frames = [solid(10), solid(20), solid(30), solid(40)]
     camera = FakeCamera(frames)
     display = FakeDisplay([32, -1, ord("r"), ord("q")])
     run(Config(), camera=camera, display=display)
     # Frame 0 is still live. Frame 1 is the held average of the first frame.
-    assert int(display.shown[1][-1, -1, 0]) == 10
+    assert int(display.shown[1][180, 220, 0]) == 10
     # Release is applied after frame 2 is drawn, so frame 3 is live again.
-    assert int(display.shown[3][-1, -1, 0]) == 40
+    assert int(display.shown[3][180, 220, 0]) == 40
 
 
 def test_hold_averages_the_recent_buffer():
@@ -126,20 +128,20 @@ def test_hold_averages_the_recent_buffer():
 def test_hold_is_restored_on_the_next_run(tmp_path, monkeypatch):
     path = tmp_path / "held.png"
     monkeypatch.setattr("ghost_image.app.held_frame_path", lambda _config: path)
-    held = np.full((80, 120, 3), 10, np.uint8)
-    live = np.full((80, 120, 3), 90, np.uint8)
+    held = np.full((200, 240, 3), 10, np.uint8)
+    live = np.full((200, 240, 3), 90, np.uint8)
     run(Config(), camera=FakeCamera([held]), display=FakeDisplay([32, ord("q")]))
     assert path.is_file()
 
     display = FakeDisplay([ord("q")])
     run(Config(), camera=FakeCamera([live]), display=display)
-    assert int(display.shown[0][-1, -1, 0]) == 10
+    assert int(display.shown[0][180, 220, 0]) == 10
 
 
 def test_release_deletes_the_saved_frame(tmp_path, monkeypatch):
     path = tmp_path / "held.png"
     monkeypatch.setattr("ghost_image.app.held_frame_path", lambda _config: path)
-    frame = np.full((80, 120, 3), 10, np.uint8)
+    frame = np.full((200, 240, 3), 10, np.uint8)
     run(
         Config(),
         camera=FakeCamera([frame, frame, frame]),
@@ -157,23 +159,44 @@ def test_held_person_is_blended_over_the_reference(monkeypatch):
             return None
 
     monkeypatch.setattr("ghost_image.app.create_segmenter", lambda _config: Solid())
-    black = np.zeros((80, 120, 3), np.uint8)
-    bright = np.full((80, 120, 3), 200, np.uint8)
+    black = np.zeros((200, 240, 3), np.uint8)
+    bright = np.full((200, 240, 3), 200, np.uint8)
     display = FakeDisplay([32, ord("q")])
     run(Config(), camera=FakeCamera([black, bright]), display=display)
     # Centre of the second frame is the ghost blend, clear of the contour glow.
-    centre = int(display.shown[1][40, 60, 0])
+    centre = int(display.shown[1][100, 120, 0])
     assert 0 < centre < 200
 
 
-def test_debug_view_shows_the_mask_once_a_frame_is_held():
-    white = np.full((80, 120, 3), 200, np.uint8)
+def test_debug_key_cycles_to_the_mask_view():
+    white = np.full((200, 240, 3), 200, np.uint8)
     camera = FakeCamera([white, white, white])
-    display = FakeDisplay([ord("d"), 32, ord("q")])
+    # composite -> live -> mask, then quit. The mask is empty until a person is held.
+    display = FakeDisplay([ord("d"), ord("d"), ord("q")])
     run(Config(), camera=camera, display=display)
-    # Debug is on and the third frame is held, so the view is the (empty) mask.
-    assert int(display.shown[2][-1, -1, 0]) == 0
-    assert int(display.shown[0][-1, -1, 0]) == 200
+    assert int(display.shown[0][180, 220, 0]) == 200
+    assert int(display.shown[2][180, 220, 0]) == 0
+
+
+def test_cycle_view_order():
+    assert cycle_view("composite") == "live"
+    assert cycle_view("live") == "mask"
+    assert cycle_view("mask") == "held"
+    assert cycle_view("held") == "composite"
+
+
+def test_snapshot_writes_the_composite(tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        "ghost_image.app.snapshot_path",
+        lambda _config, stamp: tmp_path / f"snapshot-{stamp}.png",
+    )
+    frame = np.full((200, 240, 3), 40, np.uint8)
+    run(Config(), camera=FakeCamera([frame]), display=FakeDisplay([ord("s"), ord("q")]))
+    saved = list(tmp_path.glob("snapshot-*.png"))
+    assert len(saved) == 1
+    loaded = cv2.imread(str(saved[0]))
+    assert loaded is not None
+    assert loaded.shape == frame.shape
 
 
 def test_quit_key_stops_and_closes():
