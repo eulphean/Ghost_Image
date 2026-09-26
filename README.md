@@ -28,6 +28,7 @@ python3.13 -m venv .venv
 source .venv/bin/activate
 pip install --upgrade pip
 pip install -r requirements.txt
+./scripts/download_models.sh   # person-segmentation model used once a frame is held
 ```
 
 ## Setup on Raspberry Pi (deployment)

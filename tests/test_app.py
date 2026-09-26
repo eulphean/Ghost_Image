@@ -148,6 +148,16 @@ def test_release_deletes_the_saved_frame(tmp_path, monkeypatch):
     assert not path.exists()
 
 
+def test_debug_view_shows_the_mask_once_a_frame_is_held():
+    white = np.full((80, 120, 3), 200, np.uint8)
+    camera = FakeCamera([white, white, white])
+    display = FakeDisplay([ord("d"), 32, ord("q")])
+    run(Config(), camera=camera, display=display)
+    # Debug is on and the third frame is held, so the view is the (empty) mask.
+    assert int(display.shown[2][-1, -1, 0]) == 0
+    assert int(display.shown[0][-1, -1, 0]) == 200
+
+
 def test_quit_key_stops_and_closes():
     camera = FakeCamera([np.zeros((8, 8, 3), np.uint8)])
     display = FakeDisplay([ord("q")])

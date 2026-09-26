@@ -7,6 +7,7 @@ Later phases plug segmentation and compositing into ``present``.
 from __future__ import annotations
 
 import resource
+import sys
 import time
 from collections import deque
 from collections.abc import Callable
@@ -17,6 +18,12 @@ import numpy as np
 
 from ghost_image.camera import open_camera
 from ghost_image.config import Config
+from ghost_image.segmentation import (
+    SegmentationError,
+    Segmenter,
+    create_segmenter,
+    mask_to_bgr,
+)
 from ghost_image.store import delete_held_frame, held_frame_path, load_held_frame, save_held_frame
 from ghost_image.ui import FpsCounter, OpenCVDisplay, draw_overlay, key_matches
 
@@ -43,6 +50,8 @@ class Session:
 
     mode: str = "live"
     held: np.ndarray | None = None
+    debug: bool = False
+    segment_error: bool = False
     recent: deque[np.ndarray] = field(default_factory=deque)
 
     def remember(self, frame: np.ndarray, hold_frames: int) -> None:
@@ -131,7 +140,9 @@ def run(
 
     fps = FpsCounter()
     session = Session()
+    session.debug = config.display.debug
     path = held_frame_path(config)
+    segmenter = None
     if config.paths.restore_held:
         restored = load_held_frame(path)
         if restored is not None:
@@ -145,8 +156,12 @@ def run(
                 time.sleep(0.05)
                 continue
             session.remember(frame, config.camera.hold_frames)
+            mask, segmenter = _person_mask(session, frame, config, segmenter)
+            visual = session.output_frame(frame)
+            if session.debug and mask is not None:
+                visual = mask_to_bgr(mask)
             image = present(
-                session.output_frame(frame),
+                visual,
                 fps=fps.tick(),
                 show_fps=config.display.show_fps,
                 mode=session.mode,
@@ -164,10 +179,45 @@ def run(
             elif key_matches(key, config.keys.release):
                 session.release()
                 delete_held_frame(path)
+            elif key_matches(key, config.keys.debug):
+                session.debug = not session.debug
     except KeyboardInterrupt:
         return 0
     finally:
+        if segmenter is not None:
+            segmenter.close()
         if owns_camera:
             camera.release()
         display.close()
     return 0
+
+
+def _person_mask(
+    session: Session,
+    frame: np.ndarray,
+    config: Config,
+    segmenter: Segmenter | None,
+) -> tuple[np.ndarray | None, Segmenter | None]:
+    """Segment the current frame once a reference is held.
+
+    The segmenter is created on the first held frame. A missing model leaves
+    the held frame on screen and reports the error once.
+    """
+    if session.mode != "held":
+        return None, segmenter
+    if segmenter is None and not session.segment_error:
+        try:
+            segmenter = create_segmenter(config)
+        except SegmentationError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            session.segment_error = True
+            return None, None
+    if segmenter is None:
+        return None, None
+    try:
+        return segmenter.mask(frame, session.held), segmenter
+    except SegmentationError as exc:
+        if not session.segment_error:
+            print(f"error: {exc}", file=sys.stderr)
+            session.segment_error = True
+        return None, segmenter
