@@ -6,6 +6,7 @@ import pytest
 
 from ghost_image import __version__
 from ghost_image.__main__ import main
+from ghost_image.camera import CameraDevice
 
 
 def test_version_flag(capsys):
@@ -26,6 +27,21 @@ def test_show_config_prints_yaml(capsys):
     out = capsys.readouterr().out
     assert "camera:" in out
     assert "ghost:" in out
+
+
+def test_list_cameras_prints_discovery(monkeypatch, capsys):
+    monkeypatch.setattr(
+        "ghost_image.__main__.list_cameras",
+        lambda _config: [CameraDevice(1, "Logitech", "/dev/video1", True)],
+    )
+    assert main(["--list-cameras"]) == 0
+    assert "Logitech" in capsys.readouterr().out
+
+
+def test_list_cameras_empty_is_an_error(monkeypatch, capsys):
+    monkeypatch.setattr("ghost_image.__main__.list_cameras", lambda _config: [])
+    assert main(["--list-cameras"]) == 1
+    assert "no cameras found" in capsys.readouterr().out
 
 
 def test_bad_config_path_returns_error(tmp_path, capsys):

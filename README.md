@@ -51,6 +51,7 @@ requirements changed.
 source .venv/bin/activate
 python -m ghost_image                # run the app
 python -m ghost_image --version
+python -m ghost_image --list-cameras # show detected cameras (USB preferred)
 python -m ghost_image --show-config  # print the resolved configuration
 python -m ghost_image -c other.yaml  # use a different config file
 ```

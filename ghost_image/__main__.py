@@ -8,6 +8,7 @@ import sys
 from pathlib import Path
 
 from ghost_image import __version__
+from ghost_image.camera import CameraError, format_camera_list, list_cameras
 from ghost_image.config import DEFAULT_CONFIG_PATH, ConfigError, load_config
 
 
@@ -29,6 +30,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="print the resolved configuration and exit",
     )
     parser.add_argument(
+        "--list-cameras",
+        action="store_true",
+        help="print discovered cameras and exit",
+    )
+    parser.add_argument(
         "--version",
         action="version",
         version=f"%(prog)s {__version__}",
@@ -48,6 +54,15 @@ def main(argv: list[str] | None = None) -> int:
     if args.show_config:
         print(config.to_yaml())
         return 0
+
+    if args.list_cameras:
+        try:
+            devices = list_cameras(config.camera)
+        except CameraError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 1
+        print(format_camera_list(devices))
+        return 0 if devices else 1
 
     # Phase 1 scaffold: report environment and exit. The camera/live view
     # main loop is added in Phase 2 (see docs/PLAN.md).
