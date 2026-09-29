@@ -61,7 +61,7 @@ class ProcessingConfig:
     mask_smoothing: float = 0.5  # EMA weight of previous mask (0 = off)
     feather_px: int = 7  # Gaussian feathering of mask edges (odd, 0 = off)
     morph_px: int = 5  # open/close kernel (odd, 0 = off)
-    min_blob_area: int = 400  # remove connected components smaller than this
+    min_blob_area: int = 100  # remove connected components smaller than this
     diff_threshold: int = 30  # frame-difference segmenter threshold (0-255)
     hybrid_mode: str = "refine"  # union | intersect | refine
     background_adapt: float = 0.02  # diff-segmenter drift rate outside the person (0 = off)
@@ -71,9 +71,9 @@ class ProcessingConfig:
 class GhostConfig:
     """Appearance of the translucent person."""
 
-    alpha: float = 0.45  # 0 = invisible, 1 = fully opaque
+    alpha: float = 0.3  # 0 = invisible, 1 = fully opaque
     alpha_step: float = 0.05  # change per key press
-    desaturate: float = 0.7  # 0 = original colour, 1 = greyscale
+    desaturate: float = 0.2  # 0 = original colour, 1 = greyscale
     tint: list[int] = field(default_factory=lambda: [255, 230, 200])  # BGR
     tint_strength: float = 0.25
     brightness: float = 1.08  # slight lift so the ghost reads lighter than the room
@@ -85,11 +85,11 @@ class GlowConfig:
     """Luminous outline around the ghost."""
 
     enabled: bool = True
-    color: list[int] = field(default_factory=lambda: [255, 240, 200])  # BGR
-    thickness: int = 3
-    blur_px: int = 21  # halo softness (odd)
+    color: list[int] = field(default_factory=lambda: [255, 255, 0])  # BGR
+    thickness: int = 1
+    blur_px: int = 5  # halo softness (odd)
     intensity: float = 1.0
-    pulse: bool = True
+    pulse: bool = False
     pulse_period_s: float = 4.0
 
 
