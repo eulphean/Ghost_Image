@@ -16,6 +16,7 @@ from ghost_image.camera import (
     format_camera_list,
     list_v4l2_cameras,
     open_capture,
+    parse_avfoundation_listing,
     probe_indices,
 )
 from ghost_image.config import CameraConfig
@@ -42,6 +43,22 @@ def test_choose_falls_back_to_builtin_when_no_usb():
 def test_choose_keeps_builtin_when_usb_not_preferred():
     chosen = choose_device([builtin(0), usb(1)], CameraConfig(prefer_usb=False))
     assert chosen.index == 0
+
+
+def test_avfoundation_listing_marks_external_cameras_usb():
+    text = "\n".join(
+        [
+            "0\tUSB Video\tAVCaptureDeviceTypeExternal",
+            "1\tMacBook Pro Camera\tAVCaptureDeviceTypeBuiltInWideAngleCamera",
+            "2\tMacBook Pro Desk View Camera\tAVCaptureDeviceTypeDeskViewCamera",
+        ]
+    )
+    devices = parse_avfoundation_listing(text)
+    chosen = choose_device(devices, CameraConfig(prefer_usb=True))
+    assert chosen.index == 0
+    assert chosen.name == "USB Video"
+    assert chosen.usb is True
+    assert devices[1].usb is False
 
 
 def test_preferred_index_overrides_usb_heuristic():

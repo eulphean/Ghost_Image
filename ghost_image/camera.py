@@ -1,11 +1,10 @@
 """Cross-platform USB camera discovery and capture.
 
 Linux (Raspberry Pi) enumerates V4L2 nodes under ``/dev/video*`` and keeps the
-ones that sit on a USB bus and advertise video capture. macOS probes
-AVFoundation indices. On macOS the built-in camera is almost always index 0, so
-when ``prefer_usb`` is set and more than one camera responds, index 0 is
-treated as built-in and a higher index is preferred. ``preferred_index``
-overrides that heuristic on either platform.
+ones that sit on a USB bus and advertise video capture. macOS asks AVFoundation
+for device names and sorts them the same way OpenCV does (by unique id), so
+index 0 is not assumed to be the built-in camera. ``preferred_index`` overrides
+auto-selection on either platform.
 """
 
 from __future__ import annotations
@@ -14,6 +13,7 @@ import ctypes
 import fcntl
 import os
 import platform
+import subprocess
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -61,6 +61,9 @@ def list_cameras(config: CameraConfig, *, system: str | None = None) -> list[Cam
     if system == "Linux":
         return list_v4l2_cameras(DEV_DIR, SYSFS_V4L, read_v4l2_device_caps)
     if system == "Darwin":
+        named = list_avfoundation_cameras()
+        if named:
+            return named
         backend = cv2.CAP_AVFOUNDATION
         return probe_indices(lambda index: cv2.VideoCapture(index, backend), PROBE_COUNT)
     backend = backend_flag(config, system)
@@ -102,6 +105,64 @@ def list_v4l2_cameras(
                 name=name or node.name,
                 path=str(dev_path),
                 usb=_sysfs_is_usb(node / "device"),
+            )
+        )
+    return devices
+
+
+_AVFOUNDATION_LIST = """
+import AVFoundation
+let types: [AVCaptureDevice.DeviceType] = [
+  .builtInWideAngleCamera, .external, .deskViewCamera, .continuityCamera
+]
+let session = AVCaptureDevice.DiscoverySession(
+  deviceTypes: types, mediaType: .video, position: .unspecified)
+let devices = session.devices.sorted { $0.uniqueID < $1.uniqueID }
+for (i, device) in devices.enumerated() {
+  let name = device.localizedName.replacingOccurrences(of: "\\t", with: " ")
+  print("\\(i)\\t\\(name)\\t\\(device.deviceType.rawValue)")
+}
+"""
+
+
+def list_avfoundation_cameras() -> list[CameraDevice]:
+    """Cameras in OpenCV's index order, with real names.
+
+    OpenCV sorts AVFoundation devices by unique id. That order is not
+    "built-in first", so a USB camera can be index 0 and the Mac camera
+    index 1. Returns an empty list when ``swift`` cannot list devices.
+    """
+    try:
+        completed = subprocess.run(
+            ["swift", "-e", _AVFOUNDATION_LIST],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return []
+    return parse_avfoundation_listing(completed.stdout)
+
+
+def parse_avfoundation_listing(text: str) -> list[CameraDevice]:
+    """Parse ``index<tab>name<tab>deviceType`` lines from the Swift lister."""
+    devices: list[CameraDevice] = []
+    for line in text.splitlines():
+        parts = line.split("\t")
+        if len(parts) != 3:
+            continue
+        index_text, name, device_type = parts
+        try:
+            index = int(index_text)
+        except ValueError:
+            continue
+        devices.append(
+            CameraDevice(
+                index=index,
+                name=name,
+                path=None,
+                usb="External" in device_type,
             )
         )
     return devices
