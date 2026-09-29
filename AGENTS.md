@@ -101,6 +101,7 @@ Ghost_Image/
 | `SPACE` | Hold current frame as background         |
 | `R`     | Release held frame (back to live view)   |
 | `D`     | Cycle debug views                        |
+| `H`     | Hide or show the status panel            |
 | `F`     | Toggle fullscreen                        |
 | `[`/`]` | Decrease / increase ghost opacity        |
 | `Q`/Esc | Quit                                     |

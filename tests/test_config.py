@@ -38,7 +38,8 @@ def test_defaults_are_valid():
 def test_shipped_config_yaml_loads_and_matches_defaults():
     """config.yaml in the repo must parse and agree with the code defaults."""
     assert DEFAULT_CONFIG_PATH.exists()
-    cfg = load_config(DEFAULT_CONFIG_PATH)
+    data = yaml.safe_load(DEFAULT_CONFIG_PATH.read_text(encoding="utf-8"))
+    cfg = config_from_dict(data)
     assert cfg.to_dict() == Config().to_dict()
 
 

@@ -97,6 +97,7 @@ class GlowConfig:
 class DisplayConfig:
     window_name: str = "Ghost Image"
     fullscreen: bool = False
+    show_status: bool = True  # LIVE/HELD, fps, and the settings line
     show_fps: bool = True
     debug: bool = False
 
@@ -127,6 +128,7 @@ class KeysConfig:
     hold: list[str] = field(default_factory=lambda: ["space"])
     release: list[str] = field(default_factory=lambda: ["r"])
     debug: list[str] = field(default_factory=lambda: ["d"])
+    hide: list[str] = field(default_factory=lambda: ["h"])
     fullscreen: list[str] = field(default_factory=lambda: ["f"])
     opacity_down: list[str] = field(default_factory=lambda: ["["])
     opacity_up: list[str] = field(default_factory=lambda: ["]"])

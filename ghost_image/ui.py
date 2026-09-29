@@ -68,16 +68,28 @@ def camera_lost_frame(
 
 
 def draw_overlay(frame: np.ndarray, lines: list[str]) -> np.ndarray:
-    """Draw ``lines`` in the top-left of a copy of ``frame``."""
+    """Draw each status line once, in white, on one black panel."""
     out = frame.copy()
-    y = 28
-    for line in lines:
-        origin = (16, y)
-        cv2.putText(out, line, origin, cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 0), 4, cv2.LINE_AA)
-        cv2.putText(
-            out, line, origin, cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 1, cv2.LINE_AA
-        )
-        y += 28
+    if not lines:
+        return out
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    scale = 0.6
+    thickness = 1
+    margin = 8
+    pad = 10
+    gap = 6
+    measured = [cv2.getTextSize(line, font, scale, thickness) for line in lines]
+    text_width = max(size[0] for size, _baseline in measured)
+    block = sum(size[1] + baseline for size, baseline in measured) + gap * (len(lines) - 1)
+    x0, y0 = margin, margin
+    x1 = min(out.shape[1], x0 + text_width + pad * 2)
+    y1 = min(out.shape[0], y0 + block + pad * 2)
+    cv2.rectangle(out, (x0, y0), (x1, y1), (0, 0, 0), cv2.FILLED)
+    y = y0 + pad
+    for line, (size, baseline) in zip(lines, measured, strict=True):
+        y += size[1]
+        cv2.putText(out, line, (x0 + pad, y), font, scale, (255, 255, 255), thickness, cv2.LINE_AA)
+        y += baseline + gap
     return out
 
 

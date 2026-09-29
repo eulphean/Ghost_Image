@@ -43,11 +43,11 @@ def test_hold_button_freezes_the_frame_like_space(tmp_path, monkeypatch):
 
     controls = GpioControls(GpioConfig(enabled=True), levels=levels)
     frames = [
-        np.full((120, 160, 3), 10, np.uint8),
-        np.full((120, 160, 3), 10, np.uint8),
-        np.full((120, 160, 3), 80, np.uint8),
+        np.full((280, 240, 3), 10, np.uint8),
+        np.full((280, 240, 3), 10, np.uint8),
+        np.full((280, 240, 3), 80, np.uint8),
     ]
     display = FakeDisplay([-1, -1, ord("q")])
     run(Config(), camera=FakeCamera(frames), display=display, buttons=controls)
     assert (tmp_path / "held.png").is_file()
-    assert int(display.shown[2][110, 140, 0]) == 10
+    assert int(display.shown[2][240, 120, 0]) == 10

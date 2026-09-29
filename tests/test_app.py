@@ -81,6 +81,14 @@ def test_present_draws_fps():
     assert not np.array_equal(out, frame)
 
 
+def test_present_can_hide_the_status_readout():
+    frame = np.zeros((40, 80, 3), np.uint8)
+    out = present(
+        frame, fps=15.0, show_fps=True, show_status=False, mode="held", lines=["opacity 0.45"]
+    )
+    assert np.array_equal(out, frame)
+
+
 def test_present_can_hide_fps_but_keeps_the_mode():
     frame = np.zeros((40, 80, 3), np.uint8)
     out = present(frame, fps=15.0, show_fps=False, mode="held")
@@ -160,12 +168,12 @@ def test_held_person_is_blended_over_the_reference(monkeypatch):
             return None
 
     monkeypatch.setattr("ghost_image.app.create_segmenter", lambda _config: Solid())
-    black = np.zeros((200, 240, 3), np.uint8)
-    bright = np.full((200, 240, 3), 200, np.uint8)
+    black = np.zeros((280, 240, 3), np.uint8)
+    bright = np.full((280, 240, 3), 200, np.uint8)
     display = FakeDisplay([32, ord("q")])
     run(Config(), camera=FakeCamera([black, bright]), display=display)
-    # Centre of the second frame is the ghost blend, clear of the contour glow.
-    centre = int(display.shown[1][100, 120, 0])
+    # Below the status panel and inside the frame, clear of the contour glow.
+    centre = int(display.shown[1][240, 120, 0])
     assert 0 < centre < 200
 
 
@@ -261,6 +269,15 @@ def test_quit_key_stops_and_closes():
     assert display.closed
     assert len(display.shown) == 1
     assert not camera.released  # caller-supplied cameras stay open
+
+
+def test_h_hides_and_shows_the_status_panel():
+    frame = np.zeros((200, 240, 3), np.uint8)
+    display = FakeDisplay([ord("h"), ord("h"), ord("q")])
+    run(Config(), camera=FakeCamera([frame, frame, frame]), display=display)
+    assert int(display.shown[0].sum()) > 0
+    assert int(display.shown[1].sum()) == 0
+    assert int(display.shown[2].sum()) > 0
 
 
 def test_fullscreen_key_toggles():

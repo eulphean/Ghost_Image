@@ -68,6 +68,7 @@ python -m ghost_image --no-restore-held       # do not reload captures/held.png
 | Space | Hold the current frame (averaged over `camera.hold_frames`) |
 | R | Release it and delete the saved reference |
 | D | Cycle the view: composite, live, mask, held frame |
+| H | Hide or show the status panel |
 | F | Fullscreen |
 | [ / ] | Ghost more transparent / more solid |
 | S | Save a snapshot of the current view to `captures/` |

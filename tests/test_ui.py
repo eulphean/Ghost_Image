@@ -28,6 +28,22 @@ def test_camera_lost_frame_is_a_labelled_black_image():
     assert int(image[0, 0, 0]) == 0
 
 
+def test_overlay_is_white_text_on_one_black_panel():
+    frame = np.full((80, 220, 3), 180, np.uint8)
+    out = draw_overlay(frame, ["LIVE", "opacity 0.45"])
+    assert int(out[8, 8, 0]) == 0
+    panel = out[8:70, 8:160]
+    assert np.any(np.all(panel == 255, axis=2))
+    assert int(out[8, 8, 1]) == int(out[8, 8, 2]) == 0
+
+
+def test_draw_overlay_puts_each_line_on_its_own_row():
+    frame = np.zeros((80, 200, 3), np.uint8)
+    out = draw_overlay(frame, ["opacity 0.45", "glow 1.0"])
+    rows = np.flatnonzero(out.any(axis=(1, 2)))
+    assert np.diff(rows).max() > 1
+
+
 def test_draw_overlay_changes_pixels():
     frame = np.zeros((80, 200, 3), np.uint8)
     out = draw_overlay(frame, ["12.0 fps"])

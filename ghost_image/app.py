@@ -113,16 +113,34 @@ def present(
     *,
     fps: float,
     show_fps: bool,
+    show_status: bool = True,
     mode: str = "live",
-    detail: str | None = None,
+    lines: list[str] | None = None,
 ) -> np.ndarray:
-    """Build the image shown for this frame, with the status readout."""
-    lines = [mode.upper()]
+    """Build the image shown for this frame, with one status row per value."""
+    if not show_status:
+        return frame.copy()
+    rows = [mode.upper()]
     if show_fps:
-        lines.append(f"{fps:4.1f} fps")
-    if detail:
-        lines.append(detail)
-    return draw_overlay(frame, lines)
+        rows.append(f"{fps:4.1f} fps")
+    if lines:
+        rows.extend(lines)
+    return draw_overlay(frame, rows)
+
+
+def status_lines(session: Session, config: Config, timings: dict[str, float]) -> list[str]:
+    """One label per row: opacity, glow, segmenter, view, and optional timings."""
+    segmenter = "off" if session.segmenter_name == "none" else session.segmenter_name
+    rows = [
+        f"opacity {session.alpha:.2f}",
+        f"glow {config.glow.intensity:.1f}",
+        f"segmenter {segmenter}",
+        f"view {session.view}",
+    ]
+    if session.view != "composite" or config.display.debug:
+        rows.append(f"segment {timings.get('segment', 0):.0f} ms")
+        rows.append(f"composite {timings.get('composite', 0):.0f} ms")
+    return rows
 
 
 def _view_frame(
@@ -242,21 +260,13 @@ def run(
                     mask, segmenter = _person_mask(session, frame, config, segmenter)
                 with timer.measure("composite"):
                     visual = _view_frame(session, frame, mask, config)
-                detail = (
-                    f"a={session.alpha:.2f} glow={config.glow.intensity:.1f} "
-                    f"{session.segmenter_name} {session.view}"
-                )
-                if session.view != "composite" or config.display.debug:
-                    detail += (
-                        f"  seg {timer.ms.get('segment', 0):.0f}ms"
-                        f" comp {timer.ms.get('composite', 0):.0f}ms"
-                    )
                 image = present(
                     visual,
                     fps=fps.tick(),
                     show_fps=config.display.show_fps,
+                    show_status=config.display.show_status,
                     mode=session.mode,
-                    detail=detail,
+                    lines=status_lines(session, config, timer.ms),
                 )
                 key = display.show(image)
                 shown += 1
@@ -273,6 +283,8 @@ def run(
                     delete_held_frame(path)
                 elif key_matches(key, config.keys.debug):
                     session.view = cycle_view(session.view)
+                elif key_matches(key, config.keys.hide):
+                    config.display.show_status = not config.display.show_status
                 elif key_matches(key, config.keys.snapshot):
                     stamp = time.strftime("%Y%m%d-%H%M%S")
                     save_snapshot(snapshot_path(config, stamp), visual)

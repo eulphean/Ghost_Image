@@ -53,7 +53,8 @@ glow:
 display:
   window_name: Ghost Image
   fullscreen: false          # the Pi kiosk sets this true in config.local.yaml
-  show_fps: true
+  show_status: true          # LIVE/HELD, fps, and the settings line; false hides all of them
+  show_fps: true             # used only when show_status is true
   debug: false               # start in debug view (per-stage timings, mask view)
 
 paths:
@@ -73,6 +74,7 @@ keys:
   hold: [space]
   release: [r]
   debug: [d]
+  hide: [h]                  # show or hide the status panel
   fullscreen: [f]
   opacity_down: ["["]
   opacity_up: ["]"]
