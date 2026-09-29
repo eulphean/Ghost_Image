@@ -4,7 +4,14 @@ from __future__ import annotations
 
 import numpy as np
 
-from ghost_image.ui import FpsCounter, camera_lost_frame, draw_overlay, key_matches, normalize_key
+from ghost_image.ui import (
+    FpsCounter,
+    camera_lost_frame,
+    draw_overlay,
+    fit_to_screen,
+    key_matches,
+    normalize_key,
+)
 
 
 def test_normalize_key_ignores_no_key():
@@ -42,6 +49,22 @@ def test_draw_overlay_puts_each_line_on_its_own_row():
     out = draw_overlay(frame, ["opacity 0.45", "glow 1.0"])
     rows = np.flatnonzero(out.any(axis=(1, 2)))
     assert np.diff(rows).max() > 1
+
+
+def test_fit_to_screen_fills_1080p_from_720p():
+    frame = np.full((720, 1280, 3), 40, np.uint8)
+    out = fit_to_screen(frame, 1920, 1080)
+    assert out.shape == (1080, 1920, 3)
+    assert int(out[0, 0, 0]) == 40
+    assert int(out[-1, -1, 0]) == 40
+
+
+def test_fit_to_screen_crops_a_taller_frame_instead_of_leaving_a_border():
+    frame = np.full((480, 640, 3), 40, np.uint8)
+    out = fit_to_screen(frame, 1920, 1080)
+    assert out.shape == (1080, 1920, 3)
+    assert int(out[0, 0, 0]) == 40
+    assert int(out[0, -1, 0]) == 40
 
 
 def test_draw_overlay_changes_pixels():

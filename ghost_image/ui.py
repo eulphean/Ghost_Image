@@ -67,6 +67,29 @@ def camera_lost_frame(
     return image
 
 
+def fit_to_screen(frame: np.ndarray, width: int, height: int) -> np.ndarray:
+    """Scale ``frame`` so it covers ``width`` x ``height``, cropping the overflow.
+
+    A 16:9 camera frame becomes exactly 1920×1080 on a 1080p screen. A different
+    aspect is cropped at the centre rather than leaving a grey border.
+    """
+    src_h, src_w = frame.shape[:2]
+    if src_w == width and src_h == height:
+        return frame
+    if src_w <= 0 or src_h <= 0 or width <= 0 or height <= 0:
+        return frame
+    scale = max(width / src_w, height / src_h)
+    resized_w = max(width, int(round(src_w * scale)))
+    resized_h = max(height, int(round(src_h * scale)))
+    resized = cv2.resize(frame, (resized_w, resized_h), interpolation=cv2.INTER_LINEAR)
+    x0 = max(0, (resized_w - width) // 2)
+    y0 = max(0, (resized_h - height) // 2)
+    cropped = resized[y0 : y0 + height, x0 : x0 + width]
+    if cropped.shape[1] != width or cropped.shape[0] != height:
+        cropped = cv2.resize(cropped, (width, height), interpolation=cv2.INTER_LINEAR)
+    return cropped
+
+
 def draw_overlay(frame: np.ndarray, lines: list[str]) -> np.ndarray:
     """Draw each status line once, in white, on one black panel."""
     out = frame.copy()
@@ -119,11 +142,16 @@ class OpenCVDisplay:
     def __init__(self, config: DisplayConfig) -> None:
         self.name = config.window_name
         self.fullscreen = config.fullscreen
-        cv2.namedWindow(self.name, cv2.WINDOW_NORMAL)
+        self.output_width = config.width
+        self.output_height = config.height
+        cv2.namedWindow(self.name, cv2.WINDOW_NORMAL | cv2.WINDOW_FREERATIO)
         self._apply_fullscreen()
 
     def show(self, frame: np.ndarray) -> int:
-        cv2.imshow(self.name, frame)
+        image = frame
+        if self.fullscreen:
+            image = fit_to_screen(frame, self.output_width, self.output_height)
+        cv2.imshow(self.name, image)
         return int(cv2.waitKey(1))
 
     def toggle_fullscreen(self) -> None:
@@ -134,5 +162,13 @@ class OpenCVDisplay:
         cv2.destroyWindow(self.name)
 
     def _apply_fullscreen(self) -> None:
-        flag = cv2.WINDOW_FULLSCREEN if self.fullscreen else cv2.WINDOW_NORMAL
+        # Free aspect lets the picture stretch to the window. Fullscreen then
+        # sizes that window to the display, and show() supplies a matching frame.
+        cv2.setWindowProperty(self.name, cv2.WND_PROP_ASPECT_RATIO, float(cv2.WINDOW_FREERATIO))
+        if self.fullscreen:
+            cv2.resizeWindow(self.name, self.output_width, self.output_height)
+            cv2.moveWindow(self.name, 0, 0)
+            flag = cv2.WINDOW_FULLSCREEN
+        else:
+            flag = cv2.WINDOW_NORMAL
         cv2.setWindowProperty(self.name, cv2.WND_PROP_FULLSCREEN, float(flag))

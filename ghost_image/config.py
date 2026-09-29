@@ -97,6 +97,8 @@ class GlowConfig:
 class DisplayConfig:
     window_name: str = "Ghost Image"
     fullscreen: bool = False
+    width: int = 1920  # fullscreen picture size
+    height: int = 1080
     show_status: bool = True  # LIVE/HELD, fps, and the settings line
     show_fps: bool = True
     debug: bool = False
@@ -281,6 +283,7 @@ def _validate(cfg: Config) -> None:
     _check(cam.fps > 0, "camera.fps must be > 0")
     _check(cam.reconnect_failures >= 1, "camera.reconnect_failures must be >= 1")
     _check(cam.hold_frames >= 1, "camera.hold_frames must be >= 1")
+    _check(cfg.display.width > 0 and cfg.display.height > 0, "display size must be > 0")
     _check(
         cam.preferred_index is None or cam.preferred_index >= 0,
         "camera.preferred_index must be >= 0 or null",
