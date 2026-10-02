@@ -51,6 +51,7 @@ from ghost_image.ui import (
     key_matches,
     portrait_tile_count,
     scaled_tile_height,
+    visible_url,
 )
 
 
@@ -63,7 +64,12 @@ class FrameSource(Protocol):
 class Display(Protocol):
     fullscreen: bool
 
-    def show(self, frame: np.ndarray, tiles: list[np.ndarray] | None = None) -> int: ...
+    def show(
+        self,
+        frame: np.ndarray,
+        tiles: list[np.ndarray] | None = None,
+        notice: str | None = None,
+    ) -> int: ...
 
     def toggle_fullscreen(self) -> None: ...
 
@@ -311,6 +317,8 @@ def run(
             session.mode = "held"
     shown = 0
     echo = EchoBuffer()
+    phone_url = getattr(phone_controls, "url", None)
+    url_started = time.perf_counter()
     try:
         while max_frames is None or shown < max_frames:
             try:
@@ -323,7 +331,10 @@ def run(
                 frame = cv2.flip(frame, 1)
             if frame is None:
                 lost = camera_lost_frame(config.camera.width, config.camera.height)
-                key = display.show(lost)
+                key = display.show(
+                    lost,
+                    notice=visible_url(phone_url, url_started, time.perf_counter()),
+                )
                 _apply_phone_request(phone_controls, session, path)
                 if key_matches(key, config.keys.quit):
                     return 0
@@ -345,7 +356,11 @@ def run(
                 )
                 if tiles is not None:
                     tiles[0] = image
-                key = display.show(image, tiles)
+                key = display.show(
+                    image,
+                    tiles,
+                    notice=visible_url(phone_url, url_started, time.perf_counter()),
+                )
                 shown += 1
                 if key_matches(key, config.keys.quit):
                     return 0

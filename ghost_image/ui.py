@@ -178,6 +178,42 @@ def fit_to_screen(frame: np.ndarray, width: int, height: int) -> np.ndarray:
     return cropped
 
 
+def visible_url(
+    url: str | None,
+    started: float,
+    now: float,
+    *,
+    seconds: float = 15.0,
+) -> str | None:
+    """The phone address while it should still be on screen."""
+    if not url or now < started or now - started >= seconds:
+        return None
+    return url
+
+
+def draw_notice(frame: np.ndarray, text: str) -> np.ndarray:
+    """Draw one line, centered, on a black bar. The source frame is left unchanged."""
+    out = frame.copy()
+    height, width = out.shape[:2]
+    if not text or width < 8 or height < 8:
+        return out
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    thickness = max(1, width // 500)
+    margin = max(8, width // 30)
+    max_width = max(1, width - margin * 2)
+    base_w = cv2.getTextSize(text, font, 1.0, thickness)[0][0]
+    scale = 1.0 if base_w <= 0 else min(2.5, max_width / base_w)
+    (text_w, text_h), baseline = cv2.getTextSize(text, font, scale, thickness)
+    pad = max(6, int(10 * scale))
+    x = max(pad, (width - text_w) // 2)
+    y = min(height - baseline - pad, max(text_h + pad, (height + text_h) // 2))
+    x0, y0 = max(0, x - pad), max(0, y - text_h - pad)
+    x1, y1 = min(width, x + text_w + pad), min(height, y + baseline + pad)
+    cv2.rectangle(out, (x0, y0), (x1, y1), (0, 0, 0), cv2.FILLED)
+    cv2.putText(out, text, (x, y), font, scale, (255, 255, 255), thickness, cv2.LINE_AA)
+    return out
+
+
 def draw_overlay(frame: np.ndarray, lines: list[str]) -> np.ndarray:
     """Draw each status line once, in white, on one black panel."""
     out = frame.copy()
@@ -238,7 +274,12 @@ class OpenCVDisplay:
         cv2.namedWindow(self.name, cv2.WINDOW_NORMAL | cv2.WINDOW_FREERATIO)
         self._apply_fullscreen()
 
-    def show(self, frame: np.ndarray, tiles: list[np.ndarray] | None = None) -> int:
+    def show(
+        self,
+        frame: np.ndarray,
+        tiles: list[np.ndarray] | None = None,
+        notice: str | None = None,
+    ) -> int:
         offset = 0.0
         now = time.perf_counter()
         portrait = self.fullscreen and self.output_width < self.output_height
@@ -256,6 +297,8 @@ class OpenCVDisplay:
                 fullscreen=self.fullscreen,
                 offset=offset,
             )
+        if notice:
+            image = draw_notice(image, notice)
         cv2.imshow(self.name, image)
         return int(cv2.waitKey(1))
 

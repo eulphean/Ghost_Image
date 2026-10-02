@@ -80,6 +80,26 @@ def test_correct_pin_asks_the_camera_loop_to_hold():
         phone.close()
 
 
+def test_phone_address_is_shown_on_the_first_frames():
+    class Phone:
+        url = "http://10.0.0.8:8080"
+
+        def poll(self) -> None:
+            return None
+
+        def close(self) -> None:
+            return
+
+    display = FakeDisplay([ord("q")])
+    run(
+        Config(),
+        camera=FakeCamera([np.full((8, 8, 3), 10, np.uint8)]),
+        display=display,
+        phone=Phone(),
+    )
+    assert display.notices[0] == "http://10.0.0.8:8080"
+
+
 def test_phone_hold_saves_the_current_picture(tmp_path, monkeypatch):
     monkeypatch.setattr("ghost_image.app.held_frame_path", lambda _config: tmp_path / "held.png")
     request = PhoneRequest()

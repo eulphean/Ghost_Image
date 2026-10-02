@@ -249,6 +249,7 @@ class RemoteControls:
         self._httpd: PhoneServer | None = None
         self._thread: threading.Thread | None = None
         self.port = config.port
+        self.url: str | None = None
         if not config.enabled:
             return
         address = (config.host, config.port)
@@ -264,7 +265,9 @@ class RemoteControls:
             daemon=True,
         )
         self._thread.start()
-        for url in page_urls(config.host, self.port):
+        urls = page_urls(config.host, self.port)
+        self.url = urls[0] if urls else None
+        for url in urls:
             message = f"Phone reset: {url}"
             print(message)
             LOGGER.info(message)

@@ -37,12 +37,19 @@ class FakeDisplay:
     def __init__(self, keys: list[int]) -> None:
         self._keys = list(keys)
         self.shown: list[np.ndarray] = []
+        self.notices: list[str | None] = []
         self.fullscreen = False
         self.closed = False
         self.toggles = 0
 
-    def show(self, frame: np.ndarray, tiles: list[np.ndarray] | None = None) -> int:
+    def show(
+        self,
+        frame: np.ndarray,
+        tiles: list[np.ndarray] | None = None,
+        notice: str | None = None,
+    ) -> int:
         self.shown.append(frame)
+        self.notices.append(notice)
         if not self._keys:
             return -1
         return self._keys.pop(0)

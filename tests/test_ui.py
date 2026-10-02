@@ -7,6 +7,7 @@ import numpy as np
 from ghost_image.ui import (
     FpsCounter,
     camera_lost_frame,
+    draw_notice,
     draw_overlay,
     fit_to_screen,
     frame_for_window,
@@ -14,6 +15,7 @@ from ghost_image.ui import (
     normalize_key,
     stack_tiles,
     tile_vertical,
+    visible_url,
 )
 
 
@@ -29,6 +31,22 @@ def test_key_matches_quit_and_space():
     assert key_matches(32, ["space"])
     assert not key_matches(-1, ["q"])
     assert not key_matches(ord("f"), ["q", "esc"])
+
+
+def test_phone_address_stays_up_for_fifteen_seconds_then_goes():
+    assert visible_url("http://10.0.0.8:8080", 10.0, 10.0) == "http://10.0.0.8:8080"
+    assert visible_url("http://10.0.0.8:8080", 10.0, 24.9) == "http://10.0.0.8:8080"
+    assert visible_url("http://10.0.0.8:8080", 10.0, 25.0) is None
+    assert visible_url(None, 10.0, 10.0) is None
+
+
+def test_notice_is_centered_and_leaves_the_source_alone():
+    frame = np.full((200, 640, 3), 40, np.uint8)
+    out = draw_notice(frame, "http://10.0.0.8:8080")
+    assert out.shape == frame.shape
+    assert int(frame[100, 320, 0]) == 40
+    assert not np.array_equal(out, frame)
+    assert int(out[8, 8, 0]) == 40
 
 
 def test_camera_lost_frame_is_a_labelled_black_image():

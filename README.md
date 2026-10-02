@@ -123,7 +123,8 @@ remote:
   pin: "2468"
 ```
 
-Restart Ghost Image. The console prints a line like `Phone reset: http://192.168.1.20:8080`.
+Restart Ghost Image. The real address appears in the middle of the picture for 15
+seconds, and the console prints the same line, `Phone reset: http://…`.
 Join the same Wi-Fi as the PC, open that address, enter the PIN, and tap **Hold**
 with the room empty. That replaces the background the same way Space does.
 **Release** clears it and returns the window to the live camera, the same way R does.
