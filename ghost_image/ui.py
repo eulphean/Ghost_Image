@@ -67,6 +67,44 @@ def camera_lost_frame(
     return image
 
 
+def tile_vertical(frame: np.ndarray, width: int, height: int) -> np.ndarray:
+    """Stack copies of ``frame`` at its own size until ``height`` is covered.
+
+    Nothing is scaled. A wide frame is centre-cropped to ``width``. A narrow
+    frame is centred on black. The last tile is cut off at the bottom of the
+    screen when it does not land on a tile boundary.
+    """
+    src_h, src_w = frame.shape[:2]
+    if src_w <= 0 or src_h <= 0 or width <= 0 or height <= 0:
+        return frame
+    count = max(1, (height + src_h - 1) // src_h)
+    stacked = np.tile(frame, (count, 1, 1))
+    view_h = min(height, stacked.shape[0])
+    view_w = min(width, stacked.shape[1])
+    x0 = max(0, (stacked.shape[1] - width) // 2)
+    cropped = stacked[0:view_h, x0 : x0 + view_w]
+    if cropped.shape[0] == height and cropped.shape[1] == width:
+        return cropped
+    canvas = np.zeros((height, width, frame.shape[2]), dtype=frame.dtype)
+    x_off = (width - cropped.shape[1]) // 2
+    canvas[0 : cropped.shape[0], x_off : x_off + cropped.shape[1]] = cropped
+    return canvas
+
+
+def frame_for_window(frame: np.ndarray, width: int, height: int, *, fullscreen: bool) -> np.ndarray:
+    """Picture to put in the window.
+
+    A landscape fullscreen window is scaled to cover it. A portrait window
+    (width < height) is filled by tiling the camera frame at its original
+    resolution, with no scaling.
+    """
+    if not fullscreen:
+        return frame
+    if width < height:
+        return tile_vertical(frame, width, height)
+    return fit_to_screen(frame, width, height)
+
+
 def fit_to_screen(frame: np.ndarray, width: int, height: int) -> np.ndarray:
     """Scale ``frame`` so it covers ``width`` x ``height``, cropping the overflow.
 
@@ -148,9 +186,12 @@ class OpenCVDisplay:
         self._apply_fullscreen()
 
     def show(self, frame: np.ndarray) -> int:
-        image = frame
-        if self.fullscreen:
-            image = fit_to_screen(frame, self.output_width, self.output_height)
+        image = frame_for_window(
+            frame,
+            self.output_width,
+            self.output_height,
+            fullscreen=self.fullscreen,
+        )
         cv2.imshow(self.name, image)
         return int(cv2.waitKey(1))
 
@@ -162,8 +203,8 @@ class OpenCVDisplay:
         cv2.destroyWindow(self.name)
 
     def _apply_fullscreen(self) -> None:
-        # Free aspect lets the picture stretch to the window. Fullscreen then
-        # sizes that window to the display, and show() supplies a matching frame.
+        # The frame passed to imshow is already this size, so the window does
+        # not stretch it. Portrait windows are tiled; landscape ones are scaled.
         cv2.setWindowProperty(self.name, cv2.WND_PROP_ASPECT_RATIO, float(cv2.WINDOW_FREERATIO))
         if self.fullscreen:
             cv2.resizeWindow(self.name, self.output_width, self.output_height)

@@ -9,8 +9,10 @@ from ghost_image.ui import (
     camera_lost_frame,
     draw_overlay,
     fit_to_screen,
+    frame_for_window,
     key_matches,
     normalize_key,
+    tile_vertical,
 )
 
 
@@ -57,6 +59,32 @@ def test_fit_to_screen_fills_1080p_from_720p():
     assert out.shape == (1080, 1920, 3)
     assert int(out[0, 0, 0]) == 40
     assert int(out[-1, -1, 0]) == 40
+
+
+def test_portrait_window_tiles_the_camera_frame_without_scaling():
+    frame = np.zeros((4, 8, 3), np.uint8)
+    frame[:, :] = (10, 20, 30)
+    frame[0, :, :] = (1, 2, 3)
+    out = tile_vertical(frame, 4, 10)
+    assert out.shape == (10, 4, 3)
+    # Centre crop of the 8-wide frame, pixels unchanged.
+    assert np.array_equal(out[0, 0], frame[0, 2])
+    assert np.array_equal(out[1, 0], frame[1, 2])
+    # ceil(10 / 4) == 3 copies, each starting on its own top row.
+    assert np.array_equal(out[4], out[0])
+    assert np.array_equal(out[8], out[0])
+
+
+def test_landscape_fullscreen_scales_and_portrait_tiles():
+    frame = np.zeros((4, 8, 3), np.uint8)
+    frame[0, 0] = (9, 9, 9)
+    landscape = frame_for_window(frame, 16, 8, fullscreen=True)
+    assert landscape.shape == (8, 16, 3)
+    portrait = frame_for_window(frame, 4, 10, fullscreen=True)
+    assert portrait.shape == (10, 4, 3)
+    assert np.array_equal(portrait[0, 0], frame[0, 2])
+    windowed = frame_for_window(frame, 4, 10, fullscreen=False)
+    assert windowed.shape == frame.shape
 
 
 def test_fit_to_screen_crops_a_taller_frame_instead_of_leaving_a_border():

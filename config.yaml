@@ -53,8 +53,8 @@ glow:
 display:
   window_name: Ghost Image
   fullscreen: false          # the Pi kiosk sets this true in config.local.yaml
-  width: 1920                # fullscreen output; the picture is scaled to fill this
-  height: 1080
+  width: 1920                # fullscreen window size. width < height tiles the camera frame
+  height: 1080               # at its own resolution; otherwise the picture is scaled to fill
   show_status: true          # LIVE/HELD, fps, and the settings line; false hides all of them
   show_fps: true             # used only when show_status is true
   debug: false               # start in debug view (per-stage timings, mask view)

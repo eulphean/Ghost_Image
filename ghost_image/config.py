@@ -97,7 +97,7 @@ class GlowConfig:
 class DisplayConfig:
     window_name: str = "Ghost Image"
     fullscreen: bool = False
-    width: int = 1920  # fullscreen picture size
+    width: int = 1920  # fullscreen window size; width < height tiles the camera frame
     height: int = 1080
     show_status: bool = True  # LIVE/HELD, fps, and the settings line
     show_fps: bool = True
