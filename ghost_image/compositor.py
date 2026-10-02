@@ -76,10 +76,6 @@ def add_glow(image: np.ndarray, layer: np.ndarray) -> np.ndarray:
     return np.clip(image.astype(np.float32) + layer, 0, 255).astype(np.uint8)
 
 
-# Older tiles are a trail, so they can update slower than the live ghost.
-_ECHO_REFRESH_S = 0.12
-
-
 class EchoBuffer:
     """Recent frames and masks, so each portrait tile can show an older ghost."""
 
@@ -88,7 +84,7 @@ class EchoBuffer:
         self._held_src: np.ndarray | None = None
         self._held: np.ndarray | None = None
         self._cached: list[np.ndarray] = []
-        self._cached_at = -1.0
+        self._cursor = 0
         self._cache_key: tuple[object, ...] | None = None
 
     def add(self, now: float, frame: np.ndarray, mask: np.ndarray, keep_s: float) -> None:
@@ -133,27 +129,36 @@ class EchoBuffer:
         fade_step: float,
         tints: list[list[int]],
     ) -> list[np.ndarray]:
-        """Paint the live tile every call. Reuse older tiles for a short interval.
+        """Paint the live ghost every call, and one older tile.
 
-        The trail is already a fraction of a second behind, so redrawing those
-        copies on every camera frame costs blend time without changing the look.
+        The outline is the slow part, so only the live tile gets one. Each
+        older tile is a tinted blend and is redrawn in turn, one per frame.
         """
         key = (count, delay_s, fade_step, round(alpha, 3), tuple(tuple(tint) for tint in tints))
-        stale = (
-            key != self._cache_key
-            or len(self._cached) != max(count - 1, 0)
-            or now - self._cached_at >= _ECHO_REFRESH_S
+        live = self._paint(
+            held, ghost, glow, alpha, threshold, now, 0, delay_s, fade_step, tints, outline=True
         )
-        if stale:
-            self._cached = [
-                self._paint(
-                    held, ghost, glow, alpha, threshold, now, index, delay_s, fade_step, tints
-                )
-                for index in range(1, count)
-            ]
-            self._cached_at = now
+        needed = max(count - 1, 0)
+        if key != self._cache_key or len(self._cached) != needed:
+            self._cached = [live.copy() for _ in range(needed)]
+            self._cursor = 0
             self._cache_key = key
-        live = self._paint(held, ghost, glow, alpha, threshold, now, 0, delay_s, fade_step, tints)
+        if self._cached:
+            slot = self._cursor % len(self._cached)
+            self._cached[slot] = self._paint(
+                held,
+                ghost,
+                glow,
+                alpha,
+                threshold,
+                now,
+                slot + 1,
+                delay_s,
+                fade_step,
+                tints,
+                outline=False,
+            )
+            self._cursor += 1
         return [live, *self._cached]
 
     def _paint(
@@ -168,12 +173,24 @@ class EchoBuffer:
         delay_s: float,
         fade_step: float,
         tints: list[list[int]],
+        *,
+        outline: bool,
     ) -> np.ndarray:
         frame, mask = self.at(now, index * delay_s)
         fade = (1.0 - fade_step) ** index
         tint = tints[index % len(tints)]
         return paint_ghost(
-            held, frame, mask, ghost, glow, alpha, threshold, now, tint=tint, fade=fade
+            held,
+            frame,
+            mask,
+            ghost,
+            glow,
+            alpha,
+            threshold,
+            now,
+            tint=tint,
+            fade=fade,
+            outline=outline,
         )
 
 
@@ -189,11 +206,14 @@ def paint_ghost(
     *,
     tint: list[int],
     fade: float,
+    outline: bool = True,
 ) -> np.ndarray:
     """One tile: the room is unchanged, and the person takes ``tint`` at ``fade`` strength."""
     body = replace(ghost, tint=list(tint))
-    edge = replace(glow, color=list(tint), intensity=glow.intensity * fade)
     image = composite(held, frame, mask, body, alpha * fade)
+    if not outline or not glow.enabled:
+        return image
+    edge = replace(glow, color=list(tint), intensity=glow.intensity * fade)
     return add_glow(image, glow_layer(mask, edge, threshold, now))
 
 

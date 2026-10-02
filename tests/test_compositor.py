@@ -134,17 +134,16 @@ def test_echo_render_keeps_older_tiles_between_refreshes():
     ghost = GhostConfig(desaturate=0.0, tint_strength=0.0, brightness=1.0, blur_px=0)
     glow = GlowConfig(enabled=False)
     kwargs = dict(
-        count=2,
+        count=3,
         delay_s=0.3,
         fade_step=0.0,
         tints=[[0, 0, 0]],
     )
     first = echo.render(held, ghost, glow, 1.0, 0.5, 1.0, **kwargs)
-    echo.add(1.05, np.full((4, 4, 3), 80, np.uint8), mask, keep_s=2.0)
     second = echo.render(held, ghost, glow, 1.0, 0.5, 1.05, **kwargs)
+    # One older tile is redrawn per frame; the other is kept.
     assert second[1] is first[1]
-    third = echo.render(held, ghost, glow, 1.0, 0.5, 1.2, **kwargs)
-    assert third[1] is not first[1]
+    assert second[2] is not first[2]
 
 
 def test_composite_resizes_a_smaller_held_frame():
