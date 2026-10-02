@@ -15,8 +15,8 @@ for measured frame rates.
 
 - Python **3.11 or newer** (3.13 is what Homebrew and current Raspberry Pi OS ship).
 - A USB webcam. The built-in camera works for development on a Mac.
-- macOS (Apple Silicon) or **64-bit** Raspberry Pi OS. MediaPipe does not
-  publish 32-bit ARM wheels.
+- macOS (Apple Silicon), **64-bit** Windows, or **64-bit** Raspberry Pi OS.
+  MediaPipe does not publish 32-bit wheels.
 
 ## Setup on macOS
 
@@ -28,6 +28,22 @@ pip install --upgrade pip
 pip install -r requirements.txt
 ./scripts/download_models.sh
 ```
+
+## Setup on Windows
+
+Use 64-bit Python 3.11 or newer, with "Add python.exe to PATH" enabled.
+Do not copy `.venv` from the Mac.
+
+```bat
+cd Ghost_Image
+scripts\windows_setup.bat
+.venv\Scripts\activate
+python -m ghost_image
+```
+
+The script creates `.venv`, installs `requirements.txt`, and downloads the
+segmentation models. Allow the camera for Python under Windows Settings →
+Privacy & security → Camera.
 
 ## Setup on Raspberry Pi
 
