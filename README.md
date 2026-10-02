@@ -34,12 +34,15 @@ pip install -r requirements.txt
 Use 64-bit Python 3.11 or newer, with "Add python.exe to PATH" enabled.
 Do not copy `.venv` from the Mac.
 
+Open PowerShell or Command Prompt in the project folder (the one that contains `config.yaml`), then:
+
 ```bat
-cd Ghost_Image
+cd C:\path\to\Ghost_Image
 scripts\windows_setup.bat
-.venv\Scripts\activate
-python -m ghost_image
+scripts\windows_run.bat
 ```
+
+`windows_setup.bat` turns on scripts for that one setup run. After that, start the app with `scripts\windows_run.bat` or `.\.venv\Scripts\python.exe -m ghost_image`. Leave `Activate.ps1` alone: Windows blocks it while script execution is disabled.
 
 The script creates `.venv`, installs `requirements.txt`, and downloads the
 segmentation models. Allow the camera for Python under Windows Settings →

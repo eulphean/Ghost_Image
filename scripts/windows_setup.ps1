@@ -64,5 +64,6 @@ foreach ($dest in $models.Keys) {
 }
 
 Write-Host ""
-Write-Host "Done. Activate with:  .venv\Scripts\activate"
-Write-Host "Run with:             python -m ghost_image"
+Write-Host "Done. From this folder, run:"
+Write-Host "  .\.venv\Scripts\python.exe -m ghost_image"
+Write-Host "Or double-click scripts\windows_run.bat"
