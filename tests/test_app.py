@@ -70,9 +70,27 @@ def test_benchmark_capture_counts_frames_on_a_fake_clock():
     assert stats["frames"] == 4
     assert stats["elapsed"] == pytest.approx(0.4)
     assert stats["fps"] == pytest.approx(10.0)
+    assert stats["cpu_seconds"] >= 0
     text = format_benchmark(stats)
     assert "fps=10.0" in text
     assert "frames=4" in text
+
+
+def test_benchmark_capture_counts_cpu_without_the_unix_resource_module(monkeypatch):
+    monkeypatch.setattr("ghost_image.app.resource", None)
+    now = {"t": 0.0}
+
+    class Cam:
+        def read(self) -> np.ndarray:
+            now["t"] += 0.1
+            return np.zeros((2, 2, 3), np.uint8)
+
+        def release(self) -> None:
+            pass
+
+    stats = benchmark_capture(Cam(), 0.15, clock=lambda: now["t"])
+    assert stats["frames"] == 2
+    assert stats["cpu_seconds"] >= 0
 
 
 def test_present_draws_fps():

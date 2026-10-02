@@ -6,8 +6,12 @@ Later phases plug segmentation and compositing into ``present``.
 
 from __future__ import annotations
 
-import resource
 import time
+
+try:
+    import resource
+except ImportError:  # Windows has no resource module.
+    resource = None
 from collections import deque
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -187,20 +191,31 @@ def benchmark_capture(
     is added, so the number is the camera's baseline.
     """
     start = clock()
-    usage = resource.getrusage(resource.RUSAGE_SELF)
+    cpu_before = _process_cpu_seconds()
     frames = 0
     while clock() - start < seconds:
         if camera.read() is not None:
             frames += 1
     elapsed = max(clock() - start, 1e-9)
-    usage_after = resource.getrusage(resource.RUSAGE_SELF)
-    cpu = (usage_after.ru_utime - usage.ru_utime) + (usage_after.ru_stime - usage.ru_stime)
+    cpu = _process_cpu_seconds() - cpu_before
     return {
         "frames": float(frames),
         "elapsed": elapsed,
         "fps": frames / elapsed,
         "cpu_seconds": cpu,
     }
+
+
+def _process_cpu_seconds() -> float:
+    """CPU seconds used by this process.
+
+    ``resource`` is Unix-only. Windows reports the same quantity through
+    ``time.process_time``.
+    """
+    if resource is not None:
+        usage = resource.getrusage(resource.RUSAGE_SELF)
+        return usage.ru_utime + usage.ru_stime
+    return time.process_time()
 
 
 def format_benchmark(stats: dict[str, float]) -> str:

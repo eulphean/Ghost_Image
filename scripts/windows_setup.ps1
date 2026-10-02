@@ -15,7 +15,7 @@ if (-not [Environment]::Is64BitOperatingSystem) {
 
 function Test-Python {
     param([string]$Exe, [string[]]$Prefix)
-    & $Exe @Prefix -c "import sys; raise SystemExit(0 if sys.version_info >= (3, 11) and sys.maxsize > 2**32 else 1)"
+    & $Exe @Prefix -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 11) and sys.maxsize > 2**32 else 1)'
     return $LASTEXITCODE -eq 0
 }
 
@@ -36,7 +36,7 @@ if (-not $python) {
     Write-Error "Python 3.11 or newer (64-bit) was not found. Install it from https://www.python.org/downloads/ and enable 'Add python.exe to PATH'."
 }
 
-$version = & $python @prefix -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')"
+$version = & $python @prefix -c 'import sys; print("{0}.{1}".format(sys.version_info.major, sys.version_info.minor))'
 Write-Host "==> System Python is $version"
 
 if (-not (Test-Path ".venv")) {

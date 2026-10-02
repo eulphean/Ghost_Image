@@ -10,7 +10,6 @@ auto-selection on either platform.
 from __future__ import annotations
 
 import ctypes
-import fcntl
 import os
 import platform
 import subprocess
@@ -342,6 +341,8 @@ class Camera:
 
 def read_v4l2_device_caps(device: Path) -> int | None:
     """Return V4L2 capability bits for ``device``, or ``None`` if it isn't capture."""
+    import fcntl  # Linux only; a top-level import breaks Windows.
+
     if not device.exists():
         return None
     caps = _V4L2Capability()
