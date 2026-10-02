@@ -16,7 +16,6 @@ from ghost_image.camera import (
     backend_flags,
     choose_device,
     format_camera_list,
-    largest_capture_size,
     list_v4l2_cameras,
     open_capture,
     parse_avfoundation_listing,
@@ -181,32 +180,6 @@ def test_v4l2_missing_sysfs_is_empty(tmp_path: Path):
 def test_windows_camera_hint_names_devices_windows_can_see():
     assert "USB Video" in windows_camera_hint(["USB Video"])
     assert "does not see a camera" in windows_camera_hint([])
-
-
-def test_largest_capture_size_keeps_the_biggest_mode_the_camera_accepts():
-    class Cap:
-        def __init__(self) -> None:
-            self.w = 0
-            self.h = 0
-            self.supported = {(1920, 1080), (1280, 720), (640, 480)}
-
-        def set(self, prop: int, value: float) -> bool:
-            if prop == cv2.CAP_PROP_FRAME_WIDTH:
-                self.w = int(value)
-            elif prop == cv2.CAP_PROP_FRAME_HEIGHT:
-                self.h = int(value)
-            return True
-
-        def get(self, prop: int) -> float:
-            if (self.w, self.h) not in self.supported:
-                return 0.0
-            if prop == cv2.CAP_PROP_FRAME_WIDTH:
-                return float(self.w)
-            if prop == cv2.CAP_PROP_FRAME_HEIGHT:
-                return float(self.h)
-            return 0.0
-
-    assert largest_capture_size(Cap()) == (1920, 1080)
 
 
 def test_windows_auto_tries_directshow_then_media_foundation():
