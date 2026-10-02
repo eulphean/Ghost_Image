@@ -26,3 +26,5 @@ def test_windows_run_uses_the_venv_python():
     text = (ROOT / "scripts" / "windows_run.bat").read_text(encoding="utf-8")
     assert r".venv\Scripts\python.exe" in text
     assert "ghost_image" in text
+    assert "config.yaml" in text
+    assert "pause" in text

@@ -44,6 +44,8 @@ scripts\windows_run.bat
 
 `windows_setup.bat` turns on scripts for that one setup run. After that, start the app with `scripts\windows_run.bat` or `.\.venv\Scripts\python.exe -m ghost_image`. Leave `Activate.ps1` alone: Windows blocks it while script execution is disabled.
 
+A Desktop icon has to be a shortcut. Leave `windows_run.bat` inside `scripts`, right-click it, and choose **Send to → Desktop (create shortcut)**. A copy of the file on the Desktop cannot find the project, and the window closes at once.
+
 Git Bash cannot activate this environment. Windows stores it in `.venv/Scripts` as `activate.bat`, which is a Command Prompt script, and there is no `.venv/bin/activate`. From Git Bash, call the interpreter directly, and list cameras from Command Prompt so DirectShow can see the device:
 
 ```bash
