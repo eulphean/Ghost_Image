@@ -67,13 +67,12 @@ def camera_lost_frame(
     return image
 
 
-def tile_vertical(frame: np.ndarray, width: int, height: int) -> np.ndarray:
+def tile_vertical(frame: np.ndarray, width: int, height: int, *, offset: float = 0.0) -> np.ndarray:
     """Scale ``frame`` to ``width`` and stack copies until ``height`` is covered.
 
     The scale keeps the camera's aspect ratio, so the picture meets the left
-    and right edges of a vertical screen. Tile count is how many of those
-    scaled heights fit in ``height``. The bottom of the last copy is cut off
-    when the stack runs past the screen.
+    and right edges of a vertical screen. ``offset`` scrolls the stack downward
+    in pixels and wraps after one tile, so the motion loops.
     """
     src_h, src_w = frame.shape[:2]
     if src_w <= 0 or src_h <= 0 or width <= 0 or height <= 0:
@@ -84,12 +83,21 @@ def tile_vertical(frame: np.ndarray, width: int, height: int) -> np.ndarray:
     else:
         interpolation = cv2.INTER_AREA if width < src_w else cv2.INTER_LINEAR
         scaled = cv2.resize(frame, (width, scaled_h), interpolation=interpolation)
-    count = max(1, (height + scaled_h - 1) // scaled_h)
+    shift = int(offset) % scaled_h
+    count = max(1, (height + scaled_h - 1) // scaled_h) + 1
     stacked = np.tile(scaled, (count, 1, 1))
-    return stacked[:height]
+    start = (scaled_h - shift) % scaled_h
+    return stacked[start : start + height]
 
 
-def frame_for_window(frame: np.ndarray, width: int, height: int, *, fullscreen: bool) -> np.ndarray:
+def frame_for_window(
+    frame: np.ndarray,
+    width: int,
+    height: int,
+    *,
+    fullscreen: bool,
+    offset: float = 0.0,
+) -> np.ndarray:
     """Picture to put in the window.
 
     A landscape fullscreen window is scaled to cover it. A portrait window
@@ -99,7 +107,7 @@ def frame_for_window(frame: np.ndarray, width: int, height: int, *, fullscreen: 
     if not fullscreen:
         return frame
     if width < height:
-        return tile_vertical(frame, width, height)
+        return tile_vertical(frame, width, height, offset=offset)
     return fit_to_screen(frame, width, height)
 
 
@@ -180,15 +188,25 @@ class OpenCVDisplay:
         self.fullscreen = config.fullscreen
         self.output_width = config.width
         self.output_height = config.height
+        self.tile_speed = config.tile_speed
+        self._tile_offset = 0.0
+        self._tile_time = time.perf_counter()
         cv2.namedWindow(self.name, cv2.WINDOW_NORMAL | cv2.WINDOW_FREERATIO)
         self._apply_fullscreen()
 
     def show(self, frame: np.ndarray) -> int:
+        offset = 0.0
+        now = time.perf_counter()
+        if self.fullscreen and self.output_width < self.output_height:
+            self._tile_offset += max(0.0, now - self._tile_time) * self.tile_speed
+            offset = self._tile_offset
+        self._tile_time = now
         image = frame_for_window(
             frame,
             self.output_width,
             self.output_height,
             fullscreen=self.fullscreen,
+            offset=offset,
         )
         cv2.imshow(self.name, image)
         return int(cv2.waitKey(1))

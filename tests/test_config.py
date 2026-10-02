@@ -131,6 +131,7 @@ def test_roundtrip_to_yaml():
         ({"ghost": {"alpha": 1.5}}, r"alpha must be in \[0, 1\]"),
         ({"ghost": {"brightness": 0}}, "brightness"),
         ({"camera": {"width": 0}}, "camera.width"),
+        ({"display": {"tile_speed": -1}}, "tile_speed"),
         ({"camera": {"hold_frames": 0}}, "hold_frames"),
         ({"camera": {"width": 12.5}}, "expected integer"),
         ({"camera": {"prefer_usb": "yes"}}, "expected true/false"),

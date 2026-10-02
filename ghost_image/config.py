@@ -102,6 +102,7 @@ class DisplayConfig:
     show_status: bool = True  # LIVE/HELD, fps, and the settings line
     show_fps: bool = True
     debug: bool = False
+    tile_speed: float = 30.0  # portrait tiles drift down, pixels per second; 0 holds still
 
 
 @dataclass
@@ -284,6 +285,7 @@ def _validate(cfg: Config) -> None:
     _check(cam.reconnect_failures >= 1, "camera.reconnect_failures must be >= 1")
     _check(cam.hold_frames >= 1, "camera.hold_frames must be >= 1")
     _check(cfg.display.width > 0 and cfg.display.height > 0, "display size must be > 0")
+    _check(cfg.display.tile_speed >= 0, "display.tile_speed must be >= 0")
     _check(
         cam.preferred_index is None or cam.preferred_index >= 0,
         "camera.preferred_index must be >= 0 or null",

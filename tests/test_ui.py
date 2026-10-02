@@ -71,6 +71,17 @@ def test_portrait_window_scales_to_the_screen_width_then_tiles():
     assert np.array_equal(out[2], out[4])
 
 
+def test_portrait_tiles_scroll_down_and_loop():
+    frame = np.zeros((4, 4, 3), np.uint8)
+    frame[0, :] = 9
+    still = tile_vertical(frame, 4, 8, offset=0)
+    moved = tile_vertical(frame, 4, 8, offset=1)
+    assert np.all(still[0] == 9)
+    assert np.all(moved[1] == 9)
+    assert np.array_equal(moved[0], still[3])
+    assert np.array_equal(tile_vertical(frame, 4, 8, offset=4), still)
+
+
 def test_landscape_fullscreen_scales_and_portrait_tiles():
     frame = np.full((4, 8, 3), 40, np.uint8)
     landscape = frame_for_window(frame, 16, 8, fullscreen=True)

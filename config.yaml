@@ -58,6 +58,7 @@ display:
   show_status: true          # LIVE/HELD, fps, and the settings line; false hides all of them
   show_fps: true             # used only when show_status is true
   debug: false               # start in debug view (per-stage timings, mask view)
+  tile_speed: 30             # portrait tiles drift down, pixels per second; 0 holds still
 
 paths:
   models_dir: models
