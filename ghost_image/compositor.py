@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import math
+from collections import deque
+from dataclasses import replace
 
 import cv2
 import numpy as np
@@ -72,3 +74,72 @@ def glow_layer(mask: np.ndarray, glow: GlowConfig, threshold: float, now: float)
 def add_glow(image: np.ndarray, layer: np.ndarray) -> np.ndarray:
     """Add an HDR-style halo onto an 8-bit image."""
     return np.clip(image.astype(np.float32) + layer, 0, 255).astype(np.uint8)
+
+
+class EchoBuffer:
+    """Recent frames and masks, so each portrait tile can show an older ghost."""
+
+    def __init__(self) -> None:
+        self._items: deque[tuple[float, np.ndarray, np.ndarray]] = deque()
+
+    def add(self, now: float, frame: np.ndarray, mask: np.ndarray, keep_s: float) -> None:
+        self._items.append((now, frame.copy(), mask.copy()))
+        while len(self._items) > 1 and now - self._items[0][0] > keep_s:
+            self._items.popleft()
+
+    def at(self, now: float, age_s: float) -> tuple[np.ndarray, np.ndarray]:
+        """Frame and mask from ``age_s`` ago, or the oldest sample still held."""
+        target = now - max(0.0, age_s)
+        chosen = self._items[0]
+        for item in self._items:
+            if item[0] <= target:
+                chosen = item
+            else:
+                break
+        return chosen[1], chosen[2]
+
+
+def paint_ghost(
+    held: np.ndarray,
+    frame: np.ndarray,
+    mask: np.ndarray,
+    ghost: GhostConfig,
+    glow: GlowConfig,
+    alpha: float,
+    threshold: float,
+    now: float,
+    *,
+    tint: list[int],
+    fade: float,
+) -> np.ndarray:
+    """One tile: the room is unchanged, and the person takes ``tint`` at ``fade`` strength."""
+    body = replace(ghost, tint=list(tint))
+    edge = replace(glow, color=list(tint), intensity=glow.intensity * fade)
+    image = composite(held, frame, mask, body, alpha * fade)
+    return add_glow(image, glow_layer(mask, edge, threshold, now))
+
+
+def echo_tiles(
+    buffer: EchoBuffer,
+    held: np.ndarray,
+    ghost: GhostConfig,
+    glow: GlowConfig,
+    alpha: float,
+    threshold: float,
+    now: float,
+    *,
+    count: int,
+    delay_s: float,
+    fade_step: float,
+    tints: list[list[int]],
+) -> list[np.ndarray]:
+    """Live ghost on tile 0, then older and fainter copies down the stack."""
+    tiles: list[np.ndarray] = []
+    for index in range(count):
+        frame, mask = buffer.at(now, index * delay_s)
+        fade = (1.0 - fade_step) ** index
+        tint = tints[index % len(tints)]
+        tiles.append(
+            paint_ghost(held, frame, mask, ghost, glow, alpha, threshold, now, tint=tint, fade=fade)
+        )
+    return tiles

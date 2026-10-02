@@ -21,7 +21,7 @@ import cv2
 import numpy as np
 
 from ghost_image.camera import open_camera
-from ghost_image.compositor import add_glow, composite, glow_layer
+from ghost_image.compositor import EchoBuffer, add_glow, composite, echo_tiles, glow_layer
 from ghost_image.config import Config
 from ghost_image.gpio import GpioControls
 from ghost_image.log import StageTimer, report_error
@@ -41,7 +41,14 @@ from ghost_image.store import (
     save_snapshot,
     snapshot_path,
 )
-from ghost_image.ui import FpsCounter, OpenCVDisplay, camera_lost_frame, draw_overlay, key_matches
+from ghost_image.ui import (
+    FpsCounter,
+    OpenCVDisplay,
+    camera_lost_frame,
+    draw_overlay,
+    key_matches,
+    portrait_tile_count,
+)
 
 
 class FrameSource(Protocol):
@@ -53,7 +60,7 @@ class FrameSource(Protocol):
 class Display(Protocol):
     fullscreen: bool
 
-    def show(self, frame: np.ndarray) -> int: ...
+    def show(self, frame: np.ndarray, tiles: list[np.ndarray] | None = None) -> int: ...
 
     def toggle_fullscreen(self) -> None: ...
 
@@ -145,6 +152,51 @@ def status_lines(session: Session, config: Config, timings: dict[str, float]) ->
         rows.append(f"segment {timings.get('segment', 0):.0f} ms")
         rows.append(f"composite {timings.get('composite', 0):.0f} ms")
     return rows
+
+
+def _composite_view(
+    session: Session,
+    frame: np.ndarray,
+    mask: np.ndarray | None,
+    config: Config,
+    echo: EchoBuffer,
+    display: Display,
+) -> tuple[np.ndarray, list[np.ndarray] | None]:
+    """The picture for this frame, and portrait echo tiles when the trail is on.
+
+    The trail is the live ghost plus older, tinted, fainter copies. It is only
+    built for the composite view on a vertical fullscreen window.
+    """
+    single = _view_frame(session, frame, mask, config)
+    trail = (
+        display.fullscreen
+        and config.display.width < config.display.height
+        and config.display.echo_delay_s > 0
+        and session.view == "composite"
+        and mask is not None
+        and session.held is not None
+    )
+    if not trail:
+        return single, None
+    count = portrait_tile_count(
+        frame.shape[0], frame.shape[1], config.display.width, config.display.height
+    )
+    now = time.perf_counter()
+    echo.add(now, frame, mask, config.display.echo_delay_s * max(count - 1, 1) + 0.05)
+    tiles = echo_tiles(
+        echo,
+        session.held,
+        config.ghost,
+        config.glow,
+        session.alpha,
+        config.processing.mask_threshold,
+        now,
+        count=count,
+        delay_s=config.display.echo_delay_s,
+        fade_step=config.display.tile_alpha_fade,
+        tints=config.display.tile_tints,
+    )
+    return tiles[0], tiles
 
 
 def _view_frame(
@@ -254,6 +306,7 @@ def run(
             session.held = restored
             session.mode = "held"
     shown = 0
+    echo = EchoBuffer()
     try:
         while max_frames is None or shown < max_frames:
             try:
@@ -274,7 +327,7 @@ def run(
                 with timer.measure("segment"):
                     mask, segmenter = _person_mask(session, frame, config, segmenter)
                 with timer.measure("composite"):
-                    visual = _view_frame(session, frame, mask, config)
+                    visual, tiles = _composite_view(session, frame, mask, config, echo, display)
                 image = present(
                     visual,
                     fps=fps.tick(),
@@ -283,7 +336,9 @@ def run(
                     mode=session.mode,
                     lines=status_lines(session, config, timer.ms),
                 )
-                key = display.show(image)
+                if tiles is not None:
+                    tiles[0] = image
+                key = display.show(image, tiles)
                 shown += 1
                 if key_matches(key, config.keys.quit):
                     return 0

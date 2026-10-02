@@ -90,6 +90,50 @@ def tile_vertical(frame: np.ndarray, width: int, height: int, *, offset: float =
     return stacked[start : start + height]
 
 
+def scaled_tile_height(src_h: int, src_w: int, width: int) -> int:
+    """Height of a camera frame after it is scaled to ``width``."""
+    if src_w <= 0:
+        return max(1, src_h)
+    return max(1, int(round(src_h * (width / src_w))))
+
+
+def portrait_tile_count(src_h: int, src_w: int, width: int, height: int) -> int:
+    """How many tiles cover a portrait window, plus one so the scroll can wrap."""
+    tile_h = scaled_tile_height(src_h, src_w, width)
+    return max(1, (height + tile_h - 1) // tile_h) + 1
+
+
+def _scale_to_width(frame: np.ndarray, width: int) -> np.ndarray:
+    src_h, src_w = frame.shape[:2]
+    scaled_h = scaled_tile_height(src_h, src_w, width)
+    if src_w == width and src_h == scaled_h:
+        return frame
+    interpolation = cv2.INTER_AREA if width < src_w else cv2.INTER_LINEAR
+    return cv2.resize(frame, (width, scaled_h), interpolation=interpolation)
+
+
+def stack_tiles(
+    tiles: list[np.ndarray], width: int, height: int, *, offset: float = 0.0
+) -> np.ndarray:
+    """Scale each tile to ``width``, stack them, and scroll the stack downward.
+
+    Tile 0 is the top of the pattern. ``offset`` moves the pattern down and
+    wraps, so the last tile comes back in at the top.
+    """
+    if not tiles or width <= 0 or height <= 0:
+        return tiles[0] if tiles else np.zeros((max(height, 1), max(width, 1), 3), np.uint8)
+    scaled = [_scale_to_width(tile, width) for tile in tiles]
+    tile_h = scaled[0].shape[0]
+    scaled = [
+        tile if tile.shape[0] == tile_h else cv2.resize(tile, (width, tile_h)) for tile in scaled
+    ]
+    pattern = np.vstack(scaled)
+    shift = int(offset) % pattern.shape[0]
+    start = (pattern.shape[0] - shift) % pattern.shape[0]
+    doubled = np.vstack([pattern, pattern])
+    return doubled[start : start + height]
+
+
 def frame_for_window(
     frame: np.ndarray,
     width: int,
@@ -194,20 +238,24 @@ class OpenCVDisplay:
         cv2.namedWindow(self.name, cv2.WINDOW_NORMAL | cv2.WINDOW_FREERATIO)
         self._apply_fullscreen()
 
-    def show(self, frame: np.ndarray) -> int:
+    def show(self, frame: np.ndarray, tiles: list[np.ndarray] | None = None) -> int:
         offset = 0.0
         now = time.perf_counter()
-        if self.fullscreen and self.output_width < self.output_height:
+        portrait = self.fullscreen and self.output_width < self.output_height
+        if portrait:
             self._tile_offset += max(0.0, now - self._tile_time) * self.tile_speed
             offset = self._tile_offset
         self._tile_time = now
-        image = frame_for_window(
-            frame,
-            self.output_width,
-            self.output_height,
-            fullscreen=self.fullscreen,
-            offset=offset,
-        )
+        if tiles and portrait:
+            image = stack_tiles(tiles, self.output_width, self.output_height, offset=offset)
+        else:
+            image = frame_for_window(
+                frame,
+                self.output_width,
+                self.output_height,
+                fullscreen=self.fullscreen,
+                offset=offset,
+            )
         cv2.imshow(self.name, image)
         return int(cv2.waitKey(1))
 

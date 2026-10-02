@@ -59,6 +59,13 @@ display:
   show_fps: true             # used only when show_status is true
   debug: false               # start in debug view (per-stage timings, mask view)
   tile_speed: 30             # portrait tiles drift down, pixels per second; 0 holds still
+  echo_delay_s: 0.3          # seconds of trail between portrait tiles; 0 repeats the live ghost
+  tile_alpha_fade: 0.25      # fraction of opacity lost on each tile down the stack
+  tile_tints:                # BGR ghost colour per tile, starting with the live one
+    - [255, 230, 200]
+    - [180, 210, 255]
+    - [255, 190, 160]
+    - [180, 255, 200]
 
 paths:
   models_dir: models

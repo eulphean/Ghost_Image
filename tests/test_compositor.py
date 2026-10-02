@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from ghost_image.compositor import add_glow, composite, glow_layer, stylise
+from ghost_image.compositor import EchoBuffer, add_glow, composite, echo_tiles, glow_layer, stylise
 from ghost_image.config import GhostConfig, GlowConfig
 
 
@@ -75,6 +75,47 @@ def test_glow_pulse_changes_intensity():
     quiet = glow_layer(mask, glow, 0.5, now=0.0)
     loud = glow_layer(mask, glow, 0.5, now=1.0)
     assert float(loud.max()) > float(quiet.max())
+
+
+def test_echo_tiles_use_an_older_frame_and_a_different_tint():
+    held = np.zeros((4, 4, 3), np.uint8)
+    live = np.full((4, 4, 3), 100, np.uint8)
+    past = np.full((4, 4, 3), 40, np.uint8)
+    mask = np.ones((4, 4), np.float32)
+    echo = EchoBuffer()
+    echo.add(0.0, past, mask, keep_s=1.0)
+    echo.add(0.3, live, mask, keep_s=1.0)
+    glow = GlowConfig(enabled=False)
+    plain = echo_tiles(
+        echo,
+        held,
+        GhostConfig(desaturate=0.0, tint_strength=0.0, brightness=1.0, blur_px=0),
+        glow,
+        alpha=1.0,
+        threshold=0.5,
+        now=0.3,
+        count=2,
+        delay_s=0.3,
+        fade_step=0.0,
+        tints=[[10, 10, 10], [200, 0, 0]],
+    )
+    assert np.all(plain[0] == 100)
+    assert np.all(plain[1] == 40)
+    tinted = echo_tiles(
+        echo,
+        held,
+        GhostConfig(desaturate=0.0, tint_strength=1.0, brightness=1.0, blur_px=0),
+        glow,
+        alpha=1.0,
+        threshold=0.5,
+        now=0.3,
+        count=2,
+        delay_s=0.0,
+        fade_step=0.0,
+        tints=[[10, 10, 10], [200, 0, 0]],
+    )
+    assert np.all(tinted[0] == 10)
+    assert np.all(tinted[1][:, :, 0] == 200)
 
 
 def test_composite_resizes_a_smaller_held_frame():

@@ -41,7 +41,7 @@ class FakeDisplay:
         self.closed = False
         self.toggles = 0
 
-    def show(self, frame: np.ndarray) -> int:
+    def show(self, frame: np.ndarray, tiles: list[np.ndarray] | None = None) -> int:
         self.shown.append(frame)
         if not self._keys:
             return -1

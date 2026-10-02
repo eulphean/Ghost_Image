@@ -132,6 +132,8 @@ def test_roundtrip_to_yaml():
         ({"ghost": {"brightness": 0}}, "brightness"),
         ({"camera": {"width": 0}}, "camera.width"),
         ({"display": {"tile_speed": -1}}, "tile_speed"),
+        ({"display": {"echo_delay_s": -0.1}}, "echo_delay_s"),
+        ({"display": {"tile_tints": [[1, 2]]}}, "tile_tints"),
         ({"camera": {"hold_frames": 0}}, "hold_frames"),
         ({"camera": {"width": 12.5}}, "expected integer"),
         ({"camera": {"prefer_usb": "yes"}}, "expected true/false"),

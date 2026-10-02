@@ -103,6 +103,16 @@ class DisplayConfig:
     show_fps: bool = True
     debug: bool = False
     tile_speed: float = 30.0  # portrait tiles drift down, pixels per second; 0 holds still
+    echo_delay_s: float = 0.3  # age gap between portrait tiles; 0 repeats the live ghost
+    tile_alpha_fade: float = 0.25  # fraction of opacity lost on each tile down the stack
+    tile_tints: list[list[int]] = field(
+        default_factory=lambda: [
+            [255, 230, 200],
+            [180, 210, 255],
+            [255, 190, 160],
+            [180, 255, 200],
+        ]
+    )
 
 
 @dataclass
@@ -286,6 +296,14 @@ def _validate(cfg: Config) -> None:
     _check(cam.hold_frames >= 1, "camera.hold_frames must be >= 1")
     _check(cfg.display.width > 0 and cfg.display.height > 0, "display size must be > 0")
     _check(cfg.display.tile_speed >= 0, "display.tile_speed must be >= 0")
+    _check(cfg.display.echo_delay_s >= 0, "display.echo_delay_s must be >= 0")
+    _check(
+        0.0 <= cfg.display.tile_alpha_fade <= 1.0,
+        "display.tile_alpha_fade must be in [0, 1]",
+    )
+    _check(len(cfg.display.tile_tints) > 0, "display.tile_tints must not be empty")
+    for tint in cfg.display.tile_tints:
+        _check_color("display.tile_tints", tint)
     _check(
         cam.preferred_index is None or cam.preferred_index >= 0,
         "camera.preferred_index must be >= 0 or null",

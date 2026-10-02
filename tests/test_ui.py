@@ -12,6 +12,7 @@ from ghost_image.ui import (
     frame_for_window,
     key_matches,
     normalize_key,
+    stack_tiles,
     tile_vertical,
 )
 
@@ -80,6 +81,17 @@ def test_portrait_tiles_scroll_down_and_loop():
     assert np.all(moved[1] == 9)
     assert np.array_equal(moved[0], still[3])
     assert np.array_equal(tile_vertical(frame, 4, 8, offset=4), still)
+
+
+def test_stack_tiles_puts_each_ghost_in_order_and_scrolls_it_down():
+    live = np.full((2, 4, 3), 1, np.uint8)
+    older = np.full((2, 4, 3), 2, np.uint8)
+    still = stack_tiles([live, older], 4, 4, offset=0)
+    assert np.all(still[:2] == 1)
+    assert np.all(still[2:] == 2)
+    moved = stack_tiles([live, older], 4, 4, offset=1)
+    assert np.all(moved[0] == 2)
+    assert np.all(moved[1:3] == 1)
 
 
 def test_landscape_fullscreen_scales_and_portrait_tiles():
