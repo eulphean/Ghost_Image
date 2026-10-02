@@ -113,6 +113,25 @@ the Mac, and the app keeps running from the keyboard if the package is missing.
 The held frame is saved to `captures/held.png` and loaded on the next launch,
 so a power cut does not forget the reference.
 
+### Reset from a phone
+
+On the exhibit PC, add this to `config.local.yaml` (choose your own PIN):
+
+```yaml
+remote:
+  enabled: true
+  pin: "2468"
+```
+
+Restart Ghost Image. The console prints a line like `Phone reset: http://192.168.1.20:8080`.
+Join the same Wi-Fi as the PC, open that address, enter the PIN, and tap **Hold**
+with the room empty. That replaces the background the same way Space does.
+**Release** clears it and returns the window to the live camera, the same way R does.
+
+The first time it starts, Windows may ask to allow Python on private networks.
+Allow it, or the phone cannot open the page. Guest Wi-Fi often hides devices
+from each other; the PC and the phone need a network where they can see each other.
+
 ## Configuration
 
 Every tunable is in [`config.yaml`](config.yaml), with a comment on each key.

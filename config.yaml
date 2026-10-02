@@ -81,6 +81,12 @@ gpio:
   hold_pin: 17               # BCM pin, press to hold the current frame
   release_pin: 27            # BCM pin, press to release it
 
+remote:
+  enabled: false             # phone page on the local network; turn on in config.local.yaml
+  host: "0.0.0.0"            # listen on every interface so a phone on the same network can connect
+  port: 8080
+  pin: ""                    # required when enabled; quote it, for example "2468"
+
 keys:
   hold: [space]
   release: [r]

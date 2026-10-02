@@ -7,6 +7,7 @@ Later phases plug segmentation and compositing into ``present``.
 from __future__ import annotations
 
 import time
+from pathlib import Path
 
 try:
     import resource
@@ -25,6 +26,7 @@ from ghost_image.compositor import EchoBuffer, add_glow, composite, glow_layer, 
 from ghost_image.config import Config
 from ghost_image.gpio import GpioControls
 from ghost_image.log import StageTimer, report_error
+from ghost_image.remote import PhoneControls, RemoteControls
 from ghost_image.segmentation import (
     DiffSegmenter,
     ProcessedSegmenter,
@@ -284,6 +286,7 @@ def run(
     display: Display | None = None,
     max_frames: int | None = None,
     buttons: GpioControls | None = None,
+    phone: PhoneControls | None = None,
 ) -> int:
     """Show the live feed until quit, Ctrl-C, or ``max_frames`` frames."""
     owns_camera = camera is None
@@ -300,6 +303,7 @@ def run(
     path = held_frame_path(config)
     segmenter = None
     controls = buttons if buttons is not None else GpioControls(config.gpio)
+    phone_controls = phone if phone is not None else RemoteControls(config.remote)
     if config.paths.restore_held:
         restored = load_held_frame(path)
         if restored is not None:
@@ -320,6 +324,7 @@ def run(
             if frame is None:
                 lost = camera_lost_frame(config.camera.width, config.camera.height)
                 key = display.show(lost)
+                _apply_phone_request(phone_controls, session, path)
                 if key_matches(key, config.keys.quit):
                     return 0
                 time.sleep(0.05)
@@ -372,12 +377,14 @@ def run(
                 elif action == "release":
                     session.release()
                     delete_held_frame(path)
+                _apply_phone_request(phone_controls, session, path)
             except Exception as exc:  # noqa: BLE001 - keep the installation up
                 _note_loop_error(session, exc)
                 time.sleep(0.05)
     except KeyboardInterrupt:
         return 0
     finally:
+        phone_controls.close()
         controls.close()
         if segmenter is not None:
             segmenter.close()
@@ -436,6 +443,25 @@ def _fallback_segmenter(
     )
     session.segmenter_name = segmenter.name
     return segmenter
+
+
+def _apply_phone_request(phone: PhoneControls, session: Session, path: Path) -> None:
+    """Hold or release when the phone page asked, and answer the page."""
+    request = phone.poll()
+    if request is None:
+        return
+    if request.action == "release":
+        session.release()
+        delete_held_frame(path)
+        request.ok = True
+        request.done.set()
+        return
+    had_frames = bool(session.recent)
+    session.hold()
+    request.ok = had_frames and session.held is not None
+    if request.ok and session.held is not None:
+        save_held_frame(path, session.held)
+    request.done.set()
 
 
 def _note_loop_error(session: Session, exc: BaseException) -> None:

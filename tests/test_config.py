@@ -26,6 +26,11 @@ def write_yaml(path: Path, data: dict) -> Path:
 # --------------------------------------------------------------------------- #
 
 
+def test_remote_pin_accepts_an_unquoted_number():
+    cfg = config_from_dict({"remote": {"enabled": True, "pin": 2468}})
+    assert cfg.remote.pin == "2468"
+
+
 def test_defaults_are_valid():
     cfg = config_from_dict({})
     assert isinstance(cfg, Config)
@@ -155,6 +160,11 @@ def test_roundtrip_to_yaml():
         ({"glow": {"thickness": 0}}, "glow.thickness"),
         ({"display": {"window_name": 42}}, "expected string"),
         ({"gpio": {"hold_pin": 40}}, "hold_pin"),
+        ({"remote": {"port": 0}}, "remote.port"),
+        ({"remote": {"port": 70000}}, "remote.port"),
+        ({"remote": {"host": "  "}}, "remote.host"),
+        ({"remote": {"enabled": True, "pin": "12"}}, "remote.pin"),
+        ({"remote": {"enabled": True, "pin": ""}}, "remote.pin"),
         ({"keys": {"quit": []}}, "non-empty list"),
         ({"keys": {"quit": ["q", 7]}}, "non-empty list"),
     ],

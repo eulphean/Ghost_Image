@@ -136,6 +136,16 @@ class GpioConfig:
 
 
 @dataclass
+class RemoteConfig:
+    """Phone page on the local network. Off unless ``enabled`` is true."""
+
+    enabled: bool = False
+    host: str = "0.0.0.0"  # every interface, so a phone on the same network can connect
+    port: int = 8080
+    pin: str = ""  # required when enabled; set it in config.local.yaml on the exhibit PC
+
+
+@dataclass
 class KeysConfig:
     """Keyboard bindings. Each entry is a list of key names accepted by ``ui``."""
 
@@ -159,6 +169,7 @@ class Config:
     display: DisplayConfig = field(default_factory=DisplayConfig)
     paths: PathsConfig = field(default_factory=PathsConfig)
     gpio: GpioConfig = field(default_factory=GpioConfig)
+    remote: RemoteConfig = field(default_factory=RemoteConfig)
     keys: KeysConfig = field(default_factory=KeysConfig)
 
     def to_dict(self) -> dict[str, Any]:
@@ -272,6 +283,8 @@ def _coerce(label: str, value: Any, default: Any) -> Any:
             return float(value)
         raise ConfigError(f"{label}: expected number, got {value!r}")
     if isinstance(default, str):
+        if label == "remote.pin" and isinstance(value, int) and not isinstance(value, bool):
+            return str(value)
         if isinstance(value, str):
             return value
         raise ConfigError(f"{label}: expected string, got {value!r}")
@@ -345,6 +358,14 @@ def _validate(cfg: Config) -> None:
     for pin_name in ("hold_pin", "release_pin"):
         pin = getattr(cfg.gpio, pin_name)
         _check(0 <= pin <= 27, f"gpio.{pin_name} must be a BCM number from 0 to 27")
+
+    _check(1 <= cfg.remote.port <= 65535, "remote.port must be from 1 to 65535")
+    _check(bool(cfg.remote.host.strip()), "remote.host must not be empty")
+    if cfg.remote.enabled:
+        _check(
+            len(cfg.remote.pin.strip()) >= 4,
+            "remote.pin must be at least 4 characters when remote.enabled is true",
+        )
 
     for f in fields(keys):
         value = getattr(keys, f.name)
