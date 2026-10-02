@@ -205,6 +205,15 @@ def test_debug_key_cycles_to_the_mask_view():
     assert int(display.shown[2][180, 220, 0]) == 0
 
 
+def test_mirror_moves_the_left_edge_to_the_right():
+    frame = np.zeros((40, 80, 3), np.uint8)
+    frame[:, 0] = 9
+    display = FakeDisplay([ord("q")])
+    run(Config(), camera=FakeCamera([frame]), display=display)
+    assert int(display.shown[0][2, -1, 0]) == 9
+    assert int(display.shown[0][2, 0, 0]) == 0
+
+
 def test_cycle_view_order():
     assert cycle_view("composite") == "live"
     assert cycle_view("live") == "mask"

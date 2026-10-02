@@ -42,6 +42,7 @@ class CameraConfig:
     preferred_index: int | None = None  # force a specific device index
     preferred_name: str | None = None  # substring match on device name (Linux)
     prefer_usb: bool = True  # skip built-in cameras when a USB one exists
+    mirror: bool = True  # left-right flip so a step to the left stays on the left
     backend: str = "auto"  # auto | v4l2 | avfoundation | dshow | msmf | any
     width: int = 1280
     height: int = 720

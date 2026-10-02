@@ -21,7 +21,7 @@ import cv2
 import numpy as np
 
 from ghost_image.camera import open_camera
-from ghost_image.compositor import EchoBuffer, add_glow, composite, echo_tiles, glow_layer
+from ghost_image.compositor import EchoBuffer, add_glow, composite, glow_layer, scale_to_tile
 from ghost_image.config import Config
 from ghost_image.gpio import GpioControls
 from ghost_image.log import StageTimer, report_error
@@ -48,6 +48,7 @@ from ghost_image.ui import (
     draw_overlay,
     key_matches,
     portrait_tile_count,
+    scaled_tile_height,
 )
 
 
@@ -167,7 +168,6 @@ def _composite_view(
     The trail is the live ghost plus older, tinted, fainter copies. It is only
     built for the composite view on a vertical fullscreen window.
     """
-    single = _view_frame(session, frame, mask, config)
     trail = (
         display.fullscreen
         and config.display.width < config.display.height
@@ -177,15 +177,15 @@ def _composite_view(
         and session.held is not None
     )
     if not trail:
-        return single, None
-    count = portrait_tile_count(
-        frame.shape[0], frame.shape[1], config.display.width, config.display.height
-    )
+        return _view_frame(session, frame, mask, config), None
+    width = config.display.width
+    height = scaled_tile_height(frame.shape[0], frame.shape[1], width)
+    count = portrait_tile_count(frame.shape[0], frame.shape[1], width, config.display.height)
     now = time.perf_counter()
-    echo.add(now, frame, mask, config.display.echo_delay_s * max(count - 1, 1) + 0.05)
-    tiles = echo_tiles(
-        echo,
-        session.held,
+    small_frame, small_mask = scale_to_tile(frame, mask, width, height)
+    echo.add(now, small_frame, small_mask, config.display.echo_delay_s * max(count - 1, 1) + 0.05)
+    tiles = echo.render(
+        echo.scaled_held(session.held, width, height),
         config.ghost,
         config.glow,
         session.alpha,
@@ -315,6 +315,8 @@ def run(
                 _note_loop_error(session, exc)
                 time.sleep(0.05)
                 continue
+            if frame is not None and config.camera.mirror:
+                frame = cv2.flip(frame, 1)
             if frame is None:
                 lost = camera_lost_frame(config.camera.width, config.camera.height)
                 key = display.show(lost)

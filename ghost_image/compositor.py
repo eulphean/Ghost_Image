@@ -76,16 +76,37 @@ def add_glow(image: np.ndarray, layer: np.ndarray) -> np.ndarray:
     return np.clip(image.astype(np.float32) + layer, 0, 255).astype(np.uint8)
 
 
+# Older tiles are a trail, so they can update slower than the live ghost.
+_ECHO_REFRESH_S = 0.12
+
+
 class EchoBuffer:
     """Recent frames and masks, so each portrait tile can show an older ghost."""
 
     def __init__(self) -> None:
         self._items: deque[tuple[float, np.ndarray, np.ndarray]] = deque()
+        self._held_src: np.ndarray | None = None
+        self._held: np.ndarray | None = None
+        self._cached: list[np.ndarray] = []
+        self._cached_at = -1.0
+        self._cache_key: tuple[object, ...] | None = None
 
     def add(self, now: float, frame: np.ndarray, mask: np.ndarray, keep_s: float) -> None:
-        self._items.append((now, frame.copy(), mask.copy()))
+        """Store ``frame`` and ``mask`` already scaled to the tile size."""
+        self._items.append((now, frame, mask))
         while len(self._items) > 1 and now - self._items[0][0] > keep_s:
             self._items.popleft()
+
+    def scaled_held(self, held: np.ndarray, width: int, height: int) -> np.ndarray:
+        if (
+            self._held is None
+            or self._held_src is not held
+            or self._held.shape[:2] != (height, width)
+        ):
+            interpolation = cv2.INTER_AREA if held.shape[1] > width else cv2.INTER_LINEAR
+            self._held = cv2.resize(held, (width, height), interpolation=interpolation)
+            self._held_src = held
+        return self._held
 
     def at(self, now: float, age_s: float) -> tuple[np.ndarray, np.ndarray]:
         """Frame and mask from ``age_s`` ago, or the oldest sample still held."""
@@ -97,6 +118,63 @@ class EchoBuffer:
             else:
                 break
         return chosen[1], chosen[2]
+
+    def render(
+        self,
+        held: np.ndarray,
+        ghost: GhostConfig,
+        glow: GlowConfig,
+        alpha: float,
+        threshold: float,
+        now: float,
+        *,
+        count: int,
+        delay_s: float,
+        fade_step: float,
+        tints: list[list[int]],
+    ) -> list[np.ndarray]:
+        """Paint the live tile every call. Reuse older tiles for a short interval.
+
+        The trail is already a fraction of a second behind, so redrawing those
+        copies on every camera frame costs blend time without changing the look.
+        """
+        key = (count, delay_s, fade_step, round(alpha, 3), tuple(tuple(tint) for tint in tints))
+        stale = (
+            key != self._cache_key
+            or len(self._cached) != max(count - 1, 0)
+            or now - self._cached_at >= _ECHO_REFRESH_S
+        )
+        if stale:
+            self._cached = [
+                self._paint(
+                    held, ghost, glow, alpha, threshold, now, index, delay_s, fade_step, tints
+                )
+                for index in range(1, count)
+            ]
+            self._cached_at = now
+            self._cache_key = key
+        live = self._paint(held, ghost, glow, alpha, threshold, now, 0, delay_s, fade_step, tints)
+        return [live, *self._cached]
+
+    def _paint(
+        self,
+        held: np.ndarray,
+        ghost: GhostConfig,
+        glow: GlowConfig,
+        alpha: float,
+        threshold: float,
+        now: float,
+        index: int,
+        delay_s: float,
+        fade_step: float,
+        tints: list[list[int]],
+    ) -> np.ndarray:
+        frame, mask = self.at(now, index * delay_s)
+        fade = (1.0 - fade_step) ** index
+        tint = tints[index % len(tints)]
+        return paint_ghost(
+            held, frame, mask, ghost, glow, alpha, threshold, now, tint=tint, fade=fade
+        )
 
 
 def paint_ghost(
@@ -117,6 +195,21 @@ def paint_ghost(
     edge = replace(glow, color=list(tint), intensity=glow.intensity * fade)
     image = composite(held, frame, mask, body, alpha * fade)
     return add_glow(image, glow_layer(mask, edge, threshold, now))
+
+
+def scale_to_tile(
+    frame: np.ndarray, mask: np.ndarray, width: int, height: int
+) -> tuple[np.ndarray, np.ndarray]:
+    if frame.shape[1] == width and frame.shape[0] == height:
+        small_frame = frame
+    else:
+        interpolation = cv2.INTER_AREA if frame.shape[1] > width else cv2.INTER_LINEAR
+        small_frame = cv2.resize(frame, (width, height), interpolation=interpolation)
+    if mask.shape[1] == width and mask.shape[0] == height:
+        small_mask = mask
+    else:
+        small_mask = cv2.resize(mask, (width, height), interpolation=cv2.INTER_LINEAR)
+    return small_frame, small_mask
 
 
 def echo_tiles(
