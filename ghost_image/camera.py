@@ -425,6 +425,46 @@ class _V4L2Capability(ctypes.Structure):
     ]
 
 
+# Modes asked of the camera, largest first. The device reports which one it
+# actually accepted; nothing here is a Betacam standard.
+_CAPTURE_MODES = (
+    (3840, 2160),
+    (2560, 1440),
+    (1920, 1080),
+    (1600, 1200),
+    (1280, 1024),
+    (1280, 720),
+    (1024, 768),
+    (800, 600),
+    (720, 576),
+    (720, 480),
+    (640, 480),
+)
+
+
+def largest_capture_size(cap: cv2.VideoCapture) -> tuple[int, int] | None:
+    """Largest width and height ``cap`` reports from :data:`_CAPTURE_MODES`.
+
+    Returns ``None`` when the capture object cannot report a size. The caller
+    then uses the configured width and height.
+    """
+    get = getattr(cap, "get", None)
+    if get is None:
+        return None
+    best: tuple[int, int] | None = None
+    best_pixels = 0
+    for width, height in _CAPTURE_MODES:
+        cap.set(cv2.CAP_PROP_FRAME_WIDTH, float(width))
+        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, float(height))
+        got_w = int(get(cv2.CAP_PROP_FRAME_WIDTH) or 0)
+        got_h = int(get(cv2.CAP_PROP_FRAME_HEIGHT) or 0)
+        pixels = got_w * got_h
+        if got_w > 0 and got_h > 0 and pixels > best_pixels:
+            best = (got_w, got_h)
+            best_pixels = pixels
+    return best
+
+
 def _configure_capture(
     cap: cv2.VideoCapture,
     config: CameraConfig,
@@ -438,9 +478,16 @@ def _configure_capture(
     cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
     if mjpg:
         cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*"MJPG"))
+    chosen = largest_capture_size(cap)
+    if chosen is None:
+        chosen = (config.width, config.height)
+    cap.set(cv2.CAP_PROP_FRAME_WIDTH, float(chosen[0]))
+    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, float(chosen[1]))
+    cap.set(cv2.CAP_PROP_FPS, float(config.fps))
+    if _read_frame(cap, attempts=attempts, pause=pause):
+        return True
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, float(config.width))
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, float(config.height))
-    cap.set(cv2.CAP_PROP_FPS, float(config.fps))
     return _read_frame(cap, attempts=attempts, pause=pause)
 
 

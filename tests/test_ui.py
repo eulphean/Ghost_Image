@@ -61,28 +61,23 @@ def test_fit_to_screen_fills_1080p_from_720p():
     assert int(out[-1, -1, 0]) == 40
 
 
-def test_portrait_window_tiles_the_camera_frame_without_scaling():
-    frame = np.zeros((4, 8, 3), np.uint8)
-    frame[:, :] = (10, 20, 30)
-    frame[0, :, :] = (1, 2, 3)
+def test_portrait_window_scales_to_the_screen_width_then_tiles():
+    frame = np.full((4, 8, 3), 40, np.uint8)
     out = tile_vertical(frame, 4, 10)
+    # 8x4 scaled to width 4 is 4x2. ceil(10 / 2) == 5 copies, edge to edge.
     assert out.shape == (10, 4, 3)
-    # Centre crop of the 8-wide frame, pixels unchanged.
-    assert np.array_equal(out[0, 0], frame[0, 2])
-    assert np.array_equal(out[1, 0], frame[1, 2])
-    # ceil(10 / 4) == 3 copies, each starting on its own top row.
-    assert np.array_equal(out[4], out[0])
-    assert np.array_equal(out[8], out[0])
+    assert np.all(out == 40)
+    assert np.array_equal(out[0], out[2])
+    assert np.array_equal(out[2], out[4])
 
 
 def test_landscape_fullscreen_scales_and_portrait_tiles():
-    frame = np.zeros((4, 8, 3), np.uint8)
-    frame[0, 0] = (9, 9, 9)
+    frame = np.full((4, 8, 3), 40, np.uint8)
     landscape = frame_for_window(frame, 16, 8, fullscreen=True)
     assert landscape.shape == (8, 16, 3)
     portrait = frame_for_window(frame, 4, 10, fullscreen=True)
     assert portrait.shape == (10, 4, 3)
-    assert np.array_equal(portrait[0, 0], frame[0, 2])
+    assert np.all(portrait == 40)
     windowed = frame_for_window(frame, 4, 10, fullscreen=False)
     assert windowed.shape == frame.shape
 

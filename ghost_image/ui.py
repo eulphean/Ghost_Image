@@ -68,35 +68,33 @@ def camera_lost_frame(
 
 
 def tile_vertical(frame: np.ndarray, width: int, height: int) -> np.ndarray:
-    """Stack copies of ``frame`` at its own size until ``height`` is covered.
+    """Scale ``frame`` to ``width`` and stack copies until ``height`` is covered.
 
-    Nothing is scaled. A wide frame is centre-cropped to ``width``. A narrow
-    frame is centred on black. The last tile is cut off at the bottom of the
-    screen when it does not land on a tile boundary.
+    The scale keeps the camera's aspect ratio, so the picture meets the left
+    and right edges of a vertical screen. Tile count is how many of those
+    scaled heights fit in ``height``. The bottom of the last copy is cut off
+    when the stack runs past the screen.
     """
     src_h, src_w = frame.shape[:2]
     if src_w <= 0 or src_h <= 0 or width <= 0 or height <= 0:
         return frame
-    count = max(1, (height + src_h - 1) // src_h)
-    stacked = np.tile(frame, (count, 1, 1))
-    view_h = min(height, stacked.shape[0])
-    view_w = min(width, stacked.shape[1])
-    x0 = max(0, (stacked.shape[1] - width) // 2)
-    cropped = stacked[0:view_h, x0 : x0 + view_w]
-    if cropped.shape[0] == height and cropped.shape[1] == width:
-        return cropped
-    canvas = np.zeros((height, width, frame.shape[2]), dtype=frame.dtype)
-    x_off = (width - cropped.shape[1]) // 2
-    canvas[0 : cropped.shape[0], x_off : x_off + cropped.shape[1]] = cropped
-    return canvas
+    scaled_h = max(1, int(round(src_h * (width / src_w))))
+    if src_w == width and src_h == scaled_h:
+        scaled = frame
+    else:
+        interpolation = cv2.INTER_AREA if width < src_w else cv2.INTER_LINEAR
+        scaled = cv2.resize(frame, (width, scaled_h), interpolation=interpolation)
+    count = max(1, (height + scaled_h - 1) // scaled_h)
+    stacked = np.tile(scaled, (count, 1, 1))
+    return stacked[:height]
 
 
 def frame_for_window(frame: np.ndarray, width: int, height: int, *, fullscreen: bool) -> np.ndarray:
     """Picture to put in the window.
 
     A landscape fullscreen window is scaled to cover it. A portrait window
-    (width < height) is filled by tiling the camera frame at its original
-    resolution, with no scaling.
+    (width < height) scales the camera frame to the window width, then tiles
+    that height until the window is covered.
     """
     if not fullscreen:
         return frame
