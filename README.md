@@ -44,9 +44,16 @@ scripts\windows_run.bat
 
 `windows_setup.bat` turns on scripts for that one setup run. After that, start the app with `scripts\windows_run.bat` or `.\.venv\Scripts\python.exe -m ghost_image`. Leave `Activate.ps1` alone: Windows blocks it while script execution is disabled.
 
+Git Bash cannot activate this environment. Windows stores it in `.venv/Scripts` as `activate.bat`, which is a Command Prompt script, and there is no `.venv/bin/activate`. From Git Bash, call the interpreter directly, and list cameras from Command Prompt so DirectShow can see the device:
+
+```bash
+.venv/Scripts/python.exe -m ghost_image --list-cameras
+```
+
 The script creates `.venv`, installs `requirements.txt`, and downloads the
 segmentation models. Allow the camera for Python under Windows Settings →
-Privacy & security → Camera.
+Privacy & security → Camera. Windows opens the camera with DirectShow. If the
+window stays black, set `camera.backend: msmf` in `config.local.yaml`.
 
 ## Setup on Raspberry Pi
 

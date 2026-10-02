@@ -12,7 +12,7 @@ camera:
   preferred_index: null      # force a device index from --list-cameras; null = auto-detect
   preferred_name: null       # substring of the device name to prefer (Linux/V4L2)
   prefer_usb: true           # skip built-in cameras when a USB camera is present
-  backend: auto              # auto | v4l2 | avfoundation | any
+  backend: auto              # auto | v4l2 | avfoundation | dshow | msmf | any
   width: 1280
   height: 720
   fps: 30

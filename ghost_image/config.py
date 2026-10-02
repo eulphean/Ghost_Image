@@ -21,7 +21,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_CONFIG_PATH = PROJECT_ROOT / "config.yaml"
 LOCAL_CONFIG_NAME = "config.local.yaml"
 
-BACKENDS = ("auto", "v4l2", "avfoundation", "any")
+BACKENDS = ("auto", "v4l2", "avfoundation", "dshow", "msmf", "any")
 SEGMENTERS = ("mediapipe", "diff", "hybrid")
 HYBRID_MODES = ("union", "intersect", "refine")
 
@@ -42,7 +42,7 @@ class CameraConfig:
     preferred_index: int | None = None  # force a specific device index
     preferred_name: str | None = None  # substring match on device name (Linux)
     prefer_usb: bool = True  # skip built-in cameras when a USB one exists
-    backend: str = "auto"  # auto | v4l2 | avfoundation | any
+    backend: str = "auto"  # auto | v4l2 | avfoundation | dshow | msmf | any
     width: int = 1280
     height: int = 720
     fps: int = 30

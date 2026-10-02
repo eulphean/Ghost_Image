@@ -9,7 +9,14 @@ from pathlib import Path
 
 from ghost_image import __version__
 from ghost_image.app import benchmark_capture, format_benchmark, run
-from ghost_image.camera import CameraError, format_camera_list, list_cameras, open_camera
+from ghost_image.camera import (
+    CameraError,
+    format_camera_list,
+    list_cameras,
+    list_windows_camera_names,
+    open_camera,
+    windows_camera_hint,
+)
 from ghost_image.config import DEFAULT_CONFIG_PATH, ConfigError, load_config
 from ghost_image.log import setup_logging
 
@@ -77,6 +84,8 @@ def main(argv: list[str] | None = None) -> int:
             print(f"error: {exc}", file=sys.stderr)
             return 1
         print(format_camera_list(devices))
+        if not devices and platform.system() == "Windows":
+            print(windows_camera_hint(list_windows_camera_names()), file=sys.stderr)
         return 0 if devices else 1
 
     if args.benchmark_seconds is not None:

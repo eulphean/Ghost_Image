@@ -3,8 +3,9 @@
 Linux (Raspberry Pi) enumerates V4L2 nodes under ``/dev/video*`` and keeps the
 ones that sit on a USB bus and advertise video capture. macOS asks AVFoundation
 for device names and sorts them the same way OpenCV does (by unique id), so
-index 0 is not assumed to be the built-in camera. ``preferred_index`` overrides
-auto-selection on either platform.
+index 0 is not assumed to be the built-in camera. Windows opens the camera
+with DirectShow, then Media Foundation. ``preferred_index`` overrides
+auto-selection on any platform.
 """
 
 from __future__ import annotations
@@ -13,8 +14,9 @@ import ctypes
 import os
 import platform
 import subprocess
+import time
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 import cv2
@@ -43,6 +45,7 @@ class CameraDevice:
     name: str
     path: str | None
     usb: bool
+    backend: int | None = None  # OpenCV capture flag that successfully opened it
 
     @property
     def description(self) -> str:
@@ -65,8 +68,7 @@ def list_cameras(config: CameraConfig, *, system: str | None = None) -> list[Cam
             return named
         backend = cv2.CAP_AVFOUNDATION
         return probe_indices(lambda index: cv2.VideoCapture(index, backend), PROBE_COUNT)
-    backend = backend_flag(config, system)
-    return probe_indices(lambda index: cv2.VideoCapture(index, backend), PROBE_COUNT)
+    return probe_backends(config, system)
 
 
 def list_v4l2_cameras(
@@ -167,11 +169,18 @@ def parse_avfoundation_listing(text: str) -> list[CameraDevice]:
     return devices
 
 
-def probe_indices(opener: Opener, count: int) -> list[CameraDevice]:
+def probe_indices(
+    opener: Opener,
+    count: int,
+    *,
+    attempts: int = 3,
+    pause: float = 0.0,
+) -> list[CameraDevice]:
     """Open indices ``0 .. count-1`` and keep those that return a frame.
 
     Index 0 is marked built-in. Any higher index that returns a frame is marked
     USB, which matches how macOS orders the built-in camera and a USB webcam.
+    ``attempts`` and ``pause`` give a slow camera time to deliver its first frame.
     """
     devices: list[CameraDevice] = []
     for index in range(count):
@@ -179,7 +188,7 @@ def probe_indices(opener: Opener, count: int) -> list[CameraDevice]:
         try:
             if cap is None or not cap.isOpened():
                 continue
-            if not _read_frame(cap):
+            if not _read_frame(cap, attempts=attempts, pause=pause):
                 continue
             devices.append(
                 CameraDevice(
@@ -230,15 +239,47 @@ def format_camera_list(devices: list[CameraDevice]) -> str:
     return "\n".join(device.description for device in devices)
 
 
-def backend_flag(config: CameraConfig, system: str) -> int:
+def backend_flags(config: CameraConfig, system: str) -> list[int]:
+    """OpenCV capture backends to try, in order.
+
+    ``auto`` uses V4L2 on Linux and AVFoundation on macOS. On Windows the
+    default ``CAP_ANY`` path asks FFmpeg to open the camera, and the pip wheel
+    has no libavdevice, so every index fails. DirectShow is tried first, then
+    Media Foundation.
+    """
     name = config.backend
     if name == "auto":
-        name = {"Linux": "v4l2", "Darwin": "avfoundation"}.get(system, "any")
-    return {
-        "v4l2": cv2.CAP_V4L2,
-        "avfoundation": cv2.CAP_AVFOUNDATION,
-        "any": cv2.CAP_ANY,
-    }[name]
+        if system == "Linux":
+            return [cv2.CAP_V4L2]
+        if system == "Darwin":
+            return [cv2.CAP_AVFOUNDATION]
+        if system == "Windows":
+            return [cv2.CAP_DSHOW, cv2.CAP_MSMF]
+        return [cv2.CAP_ANY]
+    return [
+        {
+            "v4l2": cv2.CAP_V4L2,
+            "avfoundation": cv2.CAP_AVFOUNDATION,
+            "dshow": cv2.CAP_DSHOW,
+            "msmf": cv2.CAP_MSMF,
+            "any": cv2.CAP_ANY,
+        }[name]
+    ]
+
+
+def probe_backends(config: CameraConfig, system: str) -> list[CameraDevice]:
+    """Probe camera indices with each backend until one returns a frame."""
+    attempts, pause = _frame_wait(system)
+    for flag in backend_flags(config, system):
+        found = probe_indices(
+            lambda index, flag=flag: cv2.VideoCapture(index, flag),
+            PROBE_COUNT,
+            attempts=attempts,
+            pause=pause,
+        )
+        if found:
+            return [replace(device, backend=flag) for device in found]
+    return []
 
 
 def open_camera(config: CameraConfig) -> Camera:
@@ -260,11 +301,6 @@ def open_capture(
 ) -> tuple[cv2.VideoCapture, CameraDevice]:
     """Open a capture device. ``opener`` and ``lister`` exist so tests inject fakes."""
     system = system if system is not None else platform.system()
-    backend = backend_flag(config, system)
-    if opener is None:
-
-        def opener(index: int, backend: int = backend) -> cv2.VideoCapture:
-            return cv2.VideoCapture(index, backend)
 
     if config.preferred_index is not None and lister is None:
         device = CameraDevice(
@@ -277,12 +313,29 @@ def open_capture(
         devices = lister() if lister is not None else list_cameras(config, system=system)
         device = choose_device(devices, config)
 
-    cap = opener(device.index)
-    if cap is None or not _configure_capture(cap, config, mjpg=backend == cv2.CAP_V4L2):
+    attempts = [device.backend] if device.backend is not None else backend_flags(config, system)
+    if opener is not None:
+        cap = opener(device.index)
+        if cap is not None and _configure_capture(cap, config, mjpg=attempts[0] == cv2.CAP_V4L2):
+            return cap, device
         if cap is not None:
             cap.release()
         raise CameraError(f"camera {device.index} ({device.name}) did not return a frame")
-    return cap, device
+
+    attempts_n, pause = _frame_wait(system)
+    for flag in attempts:
+        cap = cv2.VideoCapture(device.index, flag)
+        if cap is not None and _configure_capture(
+            cap,
+            config,
+            mjpg=flag == cv2.CAP_V4L2,
+            attempts=attempts_n,
+            pause=pause,
+        ):
+            return cap, replace(device, backend=flag)
+        if cap is not None:
+            cap.release()
+    raise CameraError(f"camera {device.index} ({device.name}) did not return a frame")
 
 
 class Camera:
@@ -372,7 +425,14 @@ class _V4L2Capability(ctypes.Structure):
     ]
 
 
-def _configure_capture(cap: cv2.VideoCapture, config: CameraConfig, *, mjpg: bool) -> bool:
+def _configure_capture(
+    cap: cv2.VideoCapture,
+    config: CameraConfig,
+    *,
+    mjpg: bool,
+    attempts: int = 3,
+    pause: float = 0.0,
+) -> bool:
     if not cap.isOpened():
         return False
     cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
@@ -381,15 +441,55 @@ def _configure_capture(cap: cv2.VideoCapture, config: CameraConfig, *, mjpg: boo
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, float(config.width))
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, float(config.height))
     cap.set(cv2.CAP_PROP_FPS, float(config.fps))
-    return _read_frame(cap)
+    return _read_frame(cap, attempts=attempts, pause=pause)
 
 
-def _read_frame(cap: cv2.VideoCapture) -> bool:
-    for _ in range(3):
+def _frame_wait(system: str) -> tuple[int, float]:
+    """How long to wait for a first frame. Windows cameras often need a moment."""
+    if system == "Windows":
+        return 40, 0.05
+    return 3, 0.0
+
+
+def _read_frame(cap: cv2.VideoCapture, *, attempts: int = 3, pause: float = 0.0) -> bool:
+    for attempt in range(attempts):
         ok, frame = cap.read()
         if ok and frame is not None and frame.size:
             return True
+        if pause and attempt + 1 < attempts:
+            time.sleep(pause)
     return False
+
+
+def list_windows_camera_names() -> list[str]:
+    """Camera names Windows itself reports. Empty when PowerShell cannot be asked."""
+    script = (
+        "Get-CimInstance Win32_PnPEntity | "
+        "Where-Object { $_.PNPClass -eq 'Camera' -or $_.PNPClass -eq 'Image' } | "
+        "ForEach-Object { $_.Name }"
+    )
+    try:
+        completed = subprocess.run(
+            ["powershell", "-NoProfile", "-Command", script],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=20,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return []
+    return [line.strip() for line in completed.stdout.splitlines() if line.strip()]
+
+
+def windows_camera_hint(names: list[str]) -> str:
+    """What to print when OpenCV found no camera on Windows."""
+    if not names:
+        return (
+            "Windows does not see a camera. Check the USB connection and "
+            "Settings → Privacy & security → Camera."
+        )
+    listed = "\n".join(f"  {name}" for name in names)
+    return f"Windows sees these cameras, but OpenCV could not open them:\n{listed}"
 
 
 def _is_capture(caps: int) -> bool:

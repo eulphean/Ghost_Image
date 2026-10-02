@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import cv2
 import numpy as np
 import pytest
 
@@ -12,12 +13,14 @@ from ghost_image.camera import (
     Camera,
     CameraDevice,
     CameraError,
+    backend_flags,
     choose_device,
     format_camera_list,
     list_v4l2_cameras,
     open_capture,
     parse_avfoundation_listing,
     probe_indices,
+    windows_camera_hint,
 )
 from ghost_image.config import CameraConfig
 
@@ -172,6 +175,36 @@ def test_v4l2_keeps_usb_capture_and_skips_metadata(tmp_path: Path):
 
 def test_v4l2_missing_sysfs_is_empty(tmp_path: Path):
     assert list_v4l2_cameras(tmp_path / "dev", tmp_path / "sys", lambda _path: None) == []
+
+
+def test_windows_camera_hint_names_devices_windows_can_see():
+    assert "USB Video" in windows_camera_hint(["USB Video"])
+    assert "does not see a camera" in windows_camera_hint([])
+
+
+def test_windows_auto_tries_directshow_then_media_foundation():
+    assert backend_flags(CameraConfig(), "Windows") == [cv2.CAP_DSHOW, cv2.CAP_MSMF]
+    assert backend_flags(CameraConfig(backend="msmf"), "Windows") == [cv2.CAP_MSMF]
+
+
+def test_open_capture_uses_the_backend_recorded_on_the_device(monkeypatch):
+    frame = np.zeros((4, 4, 3), np.uint8)
+    opened: list[tuple[int, int]] = []
+
+    def fake_capture(index: int, backend: int) -> FakeCap:
+        opened.append((index, backend))
+        return FakeCap([frame])
+
+    monkeypatch.setattr("ghost_image.camera.cv2.VideoCapture", fake_capture)
+    device = CameraDevice(0, "USB Video", None, True, backend=cv2.CAP_MSMF)
+    cap, chosen = open_capture(
+        CameraConfig(),
+        system="Windows",
+        lister=lambda: [device],
+    )
+    assert opened == [(0, cv2.CAP_MSMF)]
+    assert chosen.backend == cv2.CAP_MSMF
+    cap.release()
 
 
 def test_open_capture_uses_lister_and_requests_size():
